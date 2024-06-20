@@ -1,0 +1,23 @@
+{
+  "words": [
+    "camelot",
+    "dartpy",
+    "deepmerge",
+    "Djmd",
+    "fuzzywuzzy",
+    "getch",
+    "getche",
+    "humanfriendly",
+    "itunes",
+    "pyrekordbox",
+    "rekordbox",
+    "rkdb",
+    "spotify",
+    "spotipy",
+    "venv",
+    "yaspin"
+  ],
+  "ignorePaths": [
+    "*.yaml"
+  ]
+}

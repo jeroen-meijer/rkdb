@@ -1,0 +1,10 @@
+deepmerge==1.1.1
+fuzzywuzzy==0.18.0
+getch==1.0
+humanfriendly==10.0
+iGetMusic==0.1.0
+pyrekordbox==0.3.2
+PyYAML==6.0.1
+Requests==2.32.3
+spotipy==2.24.0
+yaspin==3.0.2
