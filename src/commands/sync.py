@@ -125,8 +125,9 @@ def sync_spotify_playlists_to_rekordbox():
       def attempt_add_track_to_missing_db():
         nonlocal itunes_rate_limit_reached
 
-        itunes_url: str | None = missing_tracks_db.get(
-          sp_track['id'], {}).get('itunes_url', None)
+        existing_entry = missing_tracks_db.get(sp_track['id'], {})
+
+        itunes_url: str | None = existing_entry.get('itunes_url', None)
 
         if itunes_url != None:
           log(f"  ├ 🛜 Found pre-existing iTunes URL: {itunes_url}")
@@ -160,6 +161,7 @@ def sync_spotify_playlists_to_rekordbox():
           'title': sp_track_name_str,
           'itunes_url': itunes_url,
           'ignored': False,
+          'date_added': existing_entry.get('date_added', datetime.datetime.now().isoformat())
         }
 
       log(f"🔎 Searching for track:   \"{sp_track_full_str}\"")
