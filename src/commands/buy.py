@@ -2,7 +2,8 @@ import os
 from enum import Enum
 from yaspin import yaspin
 from getch import getche
-from db import get_missing_tracks_db, set_missing_tracks_db
+from commands.search import search_rekordbox_tracks
+from db import get_missing_tracks_db, get_track_id_overrides_db, set_missing_tracks_db, set_track_id_overrides_db
 
 
 def buy_tracks():
@@ -15,6 +16,8 @@ def buy_tracks():
   The user can opt to skip the track, mark it as bought, or mark it as not found.
   Tracks that are marked as bought will be removed from the `missing_tracks` yaml file.
   """
+
+  track_id_overrides_db = get_track_id_overrides_db()
 
   missing_tracks_db: dict = get_missing_tracks_db()
   missing_tracks_without_ignored = {
@@ -42,7 +45,7 @@ def buy_tracks():
       counter = f"{str(i + 1).rjust(len(str(total_missing_tracks_to_process)))
                    }/{total_missing_tracks_to_process}"
       prompt = f"[{counter}] {_bold(full_track_str)} · Did you buy this track? ({
-          _bold('Y')}/N/I/R/Q)"
+          _bold('Y')}/N/S/I/R/Q)"
 
       with yaspin(text=prompt, color="blue") as sp:
         latest_spinner = sp
@@ -56,6 +59,7 @@ def buy_tracks():
         possible_actions = [
             _BuyAction.YES,
             _BuyAction.NO,
+            _BuyAction.SEARCH,
             _BuyAction.IGNORE,
             _BuyAction.QUIT,
         ]
@@ -87,6 +91,22 @@ def buy_tracks():
         elif action == _BuyAction.IGNORE:
           sp.fail("🚫")
           missing_tracks_db[spotify_track_id]["ignored"] = True
+        elif action == _BuyAction.SEARCH:
+          sp.ok("🔎")
+          rb_track_id = search_rekordbox_tracks(
+            select_mode=True,
+            result_limit=20
+          )
+          if rb_track_id == None:
+            print("  - ⏩ Skipping update of track ID override")
+          else:
+            track_id_overrides_db["content"]["spotify"][spotify_track_id] = rb_track_id
+            print(
+              "  - 🔄 Updated track ID override for " +
+              f"{spotify_track_id} to {rb_track_id}",
+            )
+            missing_tracks_db.pop(spotify_track_id)
+            print("  - 🗑️  Removed track from missing tracks DB")
         elif action == _BuyAction.QUIT:
           raise KeyboardInterrupt()
 
@@ -98,9 +118,10 @@ def buy_tracks():
 
   with yaspin(text="Saving changes...", color="blue") as sp:
     set_missing_tracks_db(missing_tracks_db)
+    set_track_id_overrides_db(track_id_overrides_db)
     sp.ok("✅")
 
-  actions_performed.pop(_BuyAction.QUIT)
+  actions_performed.pop(_BuyAction.QUIT, None)
 
   total_tracks_processed = sum(actions_performed.values())
   total_missing_tracks_to_process_afterwards = (
@@ -131,6 +152,7 @@ def _bold(text: str) -> str:
 class _BuyAction(Enum):
   YES = "y"
   NO = "n"
+  SEARCH = "s"
   IGNORE = "i"
   QUIT = "q"
 

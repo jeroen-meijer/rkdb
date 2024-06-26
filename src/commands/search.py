@@ -2,8 +2,12 @@ from functions import find_track
 from services import setup_rekordbox
 
 
-def search_rekordbox_tracks(fuzzy_match_threshold=60):
-  rb = setup_rekordbox()
+def search_rekordbox_tracks(
+    fuzzy_match_threshold: int = 60,
+    select_mode: bool = False,
+    result_limit: int = 10,
+) -> str | None:
+  rb = setup_rekordbox(allow_while_running=True)
   all_tracks = list(
       filter(
           lambda track: track.Title != None and track.ArtistName != None,
@@ -24,7 +28,7 @@ def search_rekordbox_tracks(fuzzy_match_threshold=60):
       if len(results) == 0:
         print("No matches found.")
       else:
-        for i in range(min(10, len(results))):
+        for i in range(min(result_limit, len(results))):
           res = results[i]
           track = res[0]
           match = res[1]
@@ -40,6 +44,19 @@ def search_rekordbox_tracks(fuzzy_match_threshold=60):
 
       print()
 
+      if select_mode:
+        try:
+          selection = int(input("Enter selection: "))
+          if selection < 1 or selection > len(results):
+            print("Invalid selection.")
+            continue
+          return results[selection - 1][0].ID
+        except ValueError:
+          print("Invalid selection.")
+          continue
+
     except KeyboardInterrupt:
+      if select_mode:
+        return None
       break
   print("Exiting")

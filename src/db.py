@@ -30,12 +30,16 @@ def get_track_id_db():
   return _load_yaml_dict(constants.TRACK_ID_DB_FILE_NAME)
 
 
+def set_track_id_db(db_dict: dict):
+  return _save_yaml_dict(constants.TRACK_ID_DB_FILE_NAME, db_dict)
+
+
 def get_track_id_overrides_db():
   return _load_yaml_dict(constants.TRACK_ID_DB_OVERRIDES_FILE_NAME)
 
 
-def set_track_id_db(db_dict: dict):
-  return _save_yaml_dict(constants.TRACK_ID_DB_FILE_NAME, db_dict)
+def set_track_id_overrides_db(db_dict: dict):
+  return _save_yaml_dict(constants.TRACK_ID_DB_OVERRIDES_FILE_NAME, db_dict)
 
 
 def get_missing_tracks_db():

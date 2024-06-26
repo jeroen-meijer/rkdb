@@ -2,9 +2,7 @@ import secret_keys
 import constants
 import spotipy as s
 import pyrekordbox as r
-from typing import List
-from functions import sanitize
-from fuzzywuzzy import fuzz
+from pyrekordbox import utils as r_utils
 
 
 def setup_spotify():
@@ -18,5 +16,10 @@ def setup_spotify():
   )
 
 
-def setup_rekordbox():
+def setup_rekordbox(allow_while_running: bool = False):
+  if (not allow_while_running) and (r_utils.get_rekordbox_pid() != 0):
+    raise Exception(
+      "Rekordbox is running. Please close Rekordbox before running this script."
+    )
+
   return r.Rekordbox6Database(key=secret_keys.REKORDBOX_DB_KEY)

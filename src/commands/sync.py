@@ -39,19 +39,24 @@ def sync_spotify_playlists_to_rekordbox():
                      list(map(lambda k: k.ScaleName, rb_camelot_keys))}")
 
   print("Fetching Spotify playlists...")
-  all_playlists = exhaust_fetch(
+  sp_all_playlists = exhaust_fetch(
     fetch=lambda offset: sp.current_user_playlists(offset=offset),
     map_elements=lambda res: res['items'],
   )
 
-  print(f"Found {len(all_playlists)} playlist(s)")
-  sp_flow_playlists = list(
-    filter(lambda playlist: playlist['name'].startswith('FLOW'), all_playlists))
-  sp_set_playlists = list(
-    filter(lambda playlist: playlist['name'].startswith('SET'), all_playlists))
+  print(f"Found {len(sp_all_playlists)} playlist(s)")
 
-  sp_all_playlists = sp_flow_playlists + sp_set_playlists
-  print(f"Syncing {len(sp_all_playlists)} Spotify playlists to Rekordbox...")
+  # Filter out playlists that don't start with a prefix from SPOTIFY_PLAYLIST_PREFIXES
+  sp_target_playlists = list(filter(
+    lambda playlist: any(
+      map(
+        lambda prefix: playlist['name'].startswith(prefix),
+        constants.SPOTIFY_PLAYLIST_PREFIXES
+      )
+    ),
+    sp_all_playlists
+  ))
+  print(f"Syncing {len(sp_target_playlists)} Spotify playlists to Rekordbox...")
 
   itunes_rate_limit_reached = False
 
@@ -185,7 +190,7 @@ def sync_spotify_playlists_to_rekordbox():
       else:
         log(f"└ ❌ Could not find track \"{sp_track_full_str}\" in Rekordbox")
         if missing_tracks_db.get(sp_track['id'], {}).get('ignored', False) == True:
-          print(f"  └ 🚫 Track is ignored")
+          log(f"  └ 🚫 Track is ignored")
         else:
           attempt_add_track_to_missing_db()
 
@@ -202,7 +207,7 @@ def sync_spotify_playlists_to_rekordbox():
 
   try:
     start_datetime = datetime.datetime.now()
-    for sp_playlist in sp_all_playlists:
+    for sp_playlist in sp_target_playlists:
       sync_playlist(sp_playlist)
     end_datetime = datetime.datetime.now()
     print(f"Synced all playlists in {
