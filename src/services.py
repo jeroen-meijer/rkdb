@@ -6,6 +6,7 @@ from typing import List
 from functions import sanitize
 from fuzzywuzzy import fuzz
 
+
 def setup_spotify():
   return s.Spotify(
     auth_manager=s.SpotifyOAuth(
@@ -16,6 +17,6 @@ def setup_spotify():
     )
   )
 
+
 def setup_rekordbox():
   return r.Rekordbox6Database(key=secret_keys.REKORDBOX_DB_KEY)
-
