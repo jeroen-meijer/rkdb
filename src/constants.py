@@ -23,5 +23,6 @@ SPOTIFY_SCOPES = [
 TRACK_ID_DB_FILE_NAME = 'track_id_db.yaml'
 TRACK_ID_DB_OVERRIDES_FILE_NAME = 'track_id_db_overrides.yaml'
 MISSING_TRACKS_FILE_NAME = 'missing_tracks.yaml'
+SYNC_REPORT_FILE_NAME_PREFIX = 'sync_report_'
 
 SPOTIFY_PLAYLIST_PREFIXES = ['FLOW', 'SET', 'COL']

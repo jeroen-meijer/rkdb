@@ -186,3 +186,4 @@ src/secret_keys.py
 missing_tracks.yaml
 track_id_db.yaml
 track_id_db_overrides.yaml
+sync_report_*.yaml

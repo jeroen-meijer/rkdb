@@ -1,3 +1,4 @@
+import datetime
 from typing import Any
 import constants
 import yaml
@@ -48,3 +49,11 @@ def get_missing_tracks_db():
 
 def set_missing_tracks_db(db_dict: dict):
   return _save_yaml_dict(constants.MISSING_TRACKS_FILE_NAME, db_dict)
+
+
+def save_sync_report(report: dict):
+  return _save_yaml_dict(
+    f"{constants.SYNC_REPORT_FILE_NAME_PREFIX}" +
+    f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}" +
+    ".yaml", report
+  )

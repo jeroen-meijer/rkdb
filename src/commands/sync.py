@@ -7,7 +7,7 @@ import humanfriendly
 import iGetMusic as iGet
 import pyrekordbox as r
 from typing import List
-from db import get_missing_tracks_db, get_track_id_db, get_track_id_overrides_db, set_missing_tracks_db, set_track_id_db
+from db import get_missing_tracks_db, get_track_id_db, get_track_id_overrides_db, save_sync_report, set_missing_tracks_db, set_track_id_db
 from functions import attempt_get_key, ensure_track_db_schema, exhaust_fetch, find_best_match, find_track, first_or_none, generate_itunes_store_url
 from services import setup_rekordbox, setup_spotify
 from requests import JSONDecodeError
@@ -60,7 +60,18 @@ def sync_spotify_playlists_to_rekordbox():
 
   itunes_rate_limit_reached = False
 
-  def sync_playlist(sp_playlist):
+  def sync_playlist(sp_playlist) -> dict:
+    # A dict that maps the position of each track in the playlist (starting from 1)
+    # to a dict containing the Spotify and Rekordbox track information.
+    # If no rekordbox track was found, the value on the 'rekordbox' key will be None.
+    playlist_sync_report = {
+      'all_tracks': {},
+      'missing_tracks': {
+        'count': 0,
+        'tracks': {},
+      }
+    }
+
     sp_playlist_name = sp_playlist['name']
 
     def log(message: str):
@@ -116,7 +127,9 @@ def sync_spotify_playlists_to_rekordbox():
     else:
       rb_playlist = rb.create_playlist(sp_playlist_name)
 
-    for sp_track in sp_playlist_tracks:
+    for i in range(len(sp_playlist_tracks)):
+      sp_track = sp_playlist_tracks[i]
+      sp_track_id = sp_track['id']
       sp_track_artist_str = ', '.join(
         list(map(lambda artist: artist['name'], sp_track['artists'])))
       sp_track_name_str = sp_track['name']
@@ -164,9 +177,9 @@ def sync_spotify_playlists_to_rekordbox():
           'date_added': existing_entry.get('date_added', datetime.datetime.now().isoformat())
         }
 
-      log(f"🔎 Searching for track:   \"{sp_track_full_str}\"")
-      rb_track_id = track_id_db['content']['spotify'].get(sp_track['id'], None)
-      rb_track = first_or_none(filter(
+      log(f"🔎 Searching for track:   [{sp_track_id}] \"{sp_track_full_str}\"")
+      rb_track_id = track_id_db['content']['spotify'].get(sp_track_id, None)
+      rb_track: r.db6.DjmdContent | None = first_or_none(filter(
         lambda track: track.ID == rb_track_id, rb_all_tracks)) if rb_track_id != None else None
       if rb_track != None:
         log(f"└ ✅ Found ID match:      {rb_track.ID}")
@@ -180,10 +193,10 @@ def sync_spotify_playlists_to_rekordbox():
           log(f"└ ✅ Found closest match: \"{
               rb_track.ArtistName} - {rb_track.Title}\" ({match_percentage}%)")
 
-          track_id_db['content']['spotify'][sp_track['id']] = rb_track.ID
+          track_id_db['content']['spotify'][sp_track_id] = rb_track.ID
 
       if rb_track != None:
-        missing_tracks_db.pop(sp_track['id'], None)
+        missing_tracks_db.pop(sp_track_id, None)
 
         if rb_playlist_key != None:
           log(f"  └ Attaching key {rb_playlist_key.ScaleName}")
@@ -191,26 +204,56 @@ def sync_spotify_playlists_to_rekordbox():
         rb.add_to_playlist(rb_playlist, rb_track)
       else:
         log(f"└ ❌ Could not find track \"{sp_track_full_str}\" in Rekordbox")
-        if missing_tracks_db.get(sp_track['id'], {}).get('ignored', False) == True:
+        if missing_tracks_db.get(sp_track_id, {}).get('ignored', False) == True:
           log(f"  └ 🚫 Track is ignored")
         else:
           attempt_add_track_to_missing_db()
 
+      playlist_sync_report['all_tracks'][i + 1] = {
+        'spotify': {
+          'id': sp_track_id,
+          'artist': sp_track_artist_str,
+          'title': sp_track_name_str,
+        },
+        'rekordbox': ({
+          'id': rb_track.ID,
+          'artist': rb_track.ArtistName,
+          'title': rb_track.Title,
+        } if rb_track != None else None)
+      }
+
+      if rb_track == None:
+        playlist_sync_report['missing_tracks']['count'] += 1
+        playlist_sync_report['missing_tracks']['tracks'][i +
+                                                         1] = {
+          'id': sp_track_id,
+          'artist': sp_track_artist_str,
+          'title': sp_track_name_str,
+        }
+
     end_datetime = datetime.datetime.now()
     log(f"Finished syncing playlist in {
         humanfriendly.format_timespan(end_datetime - start_datetime)}")
+
+    return playlist_sync_report
+
+  sync_report = {}
 
   def save_dbs():
     print(f"Saving ID DB ({len(track_id_db['content']['spotify'])} entries)...")
     set_track_id_db(track_id_db)
     print(f"Saving missing tracks DB ({len(missing_tracks_db)} entries)...")
     set_missing_tracks_db(missing_tracks_db)
-    print(f"Wrote missing tracks to file {constants.MISSING_TRACKS_FILE_NAME}")
+    print(f"Saving sync report ({len(sync_report)} playlists)...")
+    save_sync_report(sync_report)
 
   try:
     start_datetime = datetime.datetime.now()
+
     for sp_playlist in sp_target_playlists:
-      sync_playlist(sp_playlist)
+      res = sync_playlist(sp_playlist)
+      sync_report[sp_playlist['name']] = res
+
     end_datetime = datetime.datetime.now()
     print(f"Synced all playlists in {
           humanfriendly.format_timespan(end_datetime - start_datetime)}")
