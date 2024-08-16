@@ -22,7 +22,18 @@ def sync_spotify_playlists_to_rekordbox():
   track_id_db = deepmerge.always_merger.merge(track_id_db, id_overrides_db)
   missing_tracks_db = get_missing_tracks_db()
 
-  print(f"Missing tracks before sync: {len(missing_tracks_db)}")
+  missing_track_count = len(missing_tracks_db)
+  missing_tracks_without_ignore_count = len(
+    list(
+      filter(
+        lambda track: not track.get('ignored', False),
+        missing_tracks_db.values()
+      )
+    )
+  )
+
+  print(f"Missing tracks before sync: {missing_track_count} ({
+        missing_tracks_without_ignore_count} unignored)")
 
   print('Fetching Rekordbox playlists...')
   rb_playlists = list(rb.get_playlist())
@@ -38,22 +49,28 @@ def sync_spotify_playlists_to_rekordbox():
     raise ValueError(f"Expected 24 keys but found {len(rb_camelot_keys)}: {
                      list(map(lambda k: k.ScaleName, rb_camelot_keys))}")
 
+  print("Logging into Spotify...")
+  sp_user = sp.current_user()
+  print(f"Logged in as {sp_user['display_name']} ('{sp_user['id']}')")
+
   print("Fetching Spotify playlists...")
   sp_all_playlists = exhaust_fetch(
-    fetch=lambda offset: sp.current_user_playlists(offset=offset),
+    fetch=lambda offset, limit: sp.current_user_playlists(
+      offset=offset,
+      limit=limit
+    ),
     map_elements=lambda res: res['items'],
   )
 
   print(f"Found {len(sp_all_playlists)} playlist(s)")
 
-  # Filter out playlists that don't start with a prefix from SPOTIFY_PLAYLIST_PREFIXES
+  # Filter out playlists so that only playlists are retained that:
+  # - start with one of the prefixes defined in constants.SPOTIFY_PLAYLIST_PREFIXES
+  # - have a name that is fully equal to one of the playlists defined in constants.SPOTIFY_PLAYLISTS
   sp_target_playlists = list(filter(
     lambda playlist: any(
-      map(
-        lambda prefix: playlist['name'].startswith(prefix),
-        constants.SPOTIFY_PLAYLIST_PREFIXES
-      )
-    ),
+      map(lambda prefix: playlist['name'].startswith(prefix), constants.SPOTIFY_PLAYLIST_PREFIXES))
+      or playlist['name'] in constants.SPOTIFY_PLAYLISTS,
     sp_all_playlists
   ))
   print(f"Syncing {len(sp_target_playlists)} Spotify playlists to Rekordbox...")
@@ -89,7 +106,11 @@ def sync_spotify_playlists_to_rekordbox():
 
     log(f"Fetching tracks...")
     sp_playlist_tracks = exhaust_fetch(
-      fetch=lambda offset: sp.playlist_items(sp_playlist['id'], offset=offset),
+      fetch=lambda offset, limit: sp.playlist_items(
+        sp_playlist['id'],
+        offset=offset,
+        limit=limit,
+      ),
       # For each res, get the items, and map each of those items to the 'track'
       map_elements=lambda res: list(
         map(lambda item: item['track'], res['items']))

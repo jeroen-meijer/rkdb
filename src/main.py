@@ -15,13 +15,13 @@ def main():
   command = args[0]
 
   command_map = {
-    'sync': sync_spotify_playlists_to_rekordbox,
-    'search': search_rekordbox_tracks,
-    'buy': buy_tracks,
+    'sync': lambda _: sync_spotify_playlists_to_rekordbox(),
+    'search': lambda _: search_rekordbox_tracks(),
+    'buy': lambda _: buy_tracks(),
   }
 
   if command in command_map:
-    command_map[command]()
+    command_map[command](args[1:])
   else:
     raise ValueError(f"Command '{command}' not found")
 

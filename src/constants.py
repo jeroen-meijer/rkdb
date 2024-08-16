@@ -26,3 +26,4 @@ MISSING_TRACKS_FILE_NAME = 'missing_tracks.yaml'
 SYNC_REPORT_FILE_NAME_PREFIX = 'sync_report_'
 
 SPOTIFY_PLAYLIST_PREFIXES = ['FLOW', 'SET', 'COL']
+SPOTIFY_PLAYLISTS = ['floatation', 'Toiletmuziek']

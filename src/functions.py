@@ -6,14 +6,14 @@ from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
 
 
 def exhaust_fetch(fetch, map_elements, stop_when=lambda all_elements: False):
-  limit = 50
+  limit = 30
   elements = []
   offset = 0
-  res = fetch(offset)
+  res = fetch(offset, limit)
   elements += map_elements(res)
   while res['next'] != None and not stop_when(elements):
     offset += limit
-    res = fetch(offset)
+    res = fetch(offset, limit)
     elements += map_elements(res)
   return elements
 
@@ -25,6 +25,8 @@ def ensure_track_db_schema(track_id_db: dict | None):
     copy['content'] = {}
   if 'spotify' not in copy['content'] or copy['content']['spotify'] == None:
     copy['content']['spotify'] = {}
+  if 'spotify_playlists' not in copy['content'] or copy['content']['spotify_playlists'] == None:
+    copy['content']['spotify_playlists'] = {}
   return copy
 
 
