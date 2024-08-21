@@ -57,3 +57,7 @@ def save_sync_report(report: dict):
     f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}" +
     ".yaml", report
   )
+
+
+def get_custom_tracks_db():
+  return _load_yaml_dict(constants.CUSTOM_TRACKS_FILE_NAME)

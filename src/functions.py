@@ -30,6 +30,17 @@ def ensure_track_db_schema(track_id_db: dict | None):
   return copy
 
 
+def ensure_custom_track_schema(custom_tracks: dict | None):
+  copy = {}
+  copy = {k: v for k, v in (
+    custom_tracks.items() if custom_tracks != None else {})}
+  if 'custom_tracks' not in copy or copy['custom_tracks'] == None:
+    copy['custom_tracks'] = {}
+  if 'spotify' not in copy['custom_tracks'] or copy['custom_tracks']['spotify'] == None:
+    copy['custom_tracks']['spotify'] = {}
+  return copy
+
+
 def sanitize(string: str, ignore_chars=[' ', '-', '_', '(', ')']):
   string = string.lower()
   for char in ignore_chars:

@@ -5,7 +5,7 @@ from services import setup_rekordbox
 def search_rekordbox_tracks(
     fuzzy_match_threshold: int = 60,
     select_mode: bool = False,
-    result_limit: int = 10,
+    result_limit: int = 30,
 ) -> str | None:
   rb = setup_rekordbox(allow_while_running=True)
   all_tracks = list(
@@ -17,13 +17,21 @@ def search_rekordbox_tracks(
   while True:
     try:
       search_query = input("Enter search query: ")
+      perform_id_search = search_query.isdigit()
 
-      results = find_track(
-          {"query": search_query},
-          all_tracks,
-          threshold=fuzzy_match_threshold,
-          match_artist_and_title=False,
-      )
+      results = []
+      if perform_id_search:
+        print("Performing ID search...")
+        res = rb.get_content(ID=int(search_query))
+        if res != None:
+          results.append((res, 100))
+      else:
+        results = find_track(
+            {"query": search_query},
+            all_tracks,
+            threshold=fuzzy_match_threshold,
+            match_artist_and_title=False,
+        )
 
       if len(results) == 0:
         print("No matches found.")
