@@ -16,7 +16,7 @@ def search_rekordbox_tracks(
   )
   while True:
     try:
-      search_query = input("Enter search query: ")
+      search_query = input("Enter search query or rekordbox ID: ")
       perform_id_search = search_query.isdigit()
 
       results = []

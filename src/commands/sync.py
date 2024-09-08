@@ -96,7 +96,9 @@ def sync_spotify_playlists_to_rekordbox():
     sp_playlist_name = sp_playlist['name']
 
     def log(message: str):
-      print(f"[{sp_playlist_name}] {message}")
+      def grey(text: str):
+        return f"\033[90m{text}\033[0m"
+      print(grey(f"[{sp_playlist_name}]") + f" {message}")
 
     start_datetime = datetime.datetime.now()
 
