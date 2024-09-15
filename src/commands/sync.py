@@ -16,7 +16,7 @@ from collections import namedtuple
 CustomTrack = namedtuple('CustomTrack', ['rekordbox_id', 'index', 'target'])
 
 
-def sync_spotify_playlists_to_rekordbox():
+def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
   rb = setup_rekordbox()
   sp = setup_spotify()
 
@@ -71,13 +71,35 @@ def sync_spotify_playlists_to_rekordbox():
   # Filter out playlists so that only playlists are retained that:
   # - start with one of the prefixes defined in constants.SPOTIFY_PLAYLIST_PREFIXES
   # - have a name that is fully equal to one of the playlists defined in constants.SPOTIFY_PLAYLISTS
-  sp_target_playlists = list(filter(
-    lambda playlist: any(
-      map(lambda prefix: playlist['name'].startswith(prefix), constants.SPOTIFY_PLAYLIST_PREFIXES))
-      or playlist['name'] in constants.SPOTIFY_PLAYLISTS,
-    sp_all_playlists
-  ))
-  print(f"Syncing {len(sp_target_playlists)} Spotify playlists to Rekordbox...")
+  sp_target_playlists = []
+
+  if len(custom_playlist_ids) > 0:
+    print(f"Filtering playlists by provided IDs...")
+    for playlist_id in custom_playlist_ids:
+      sp_playlist = first_or_none(
+        filter(lambda playlist: playlist['id'] == playlist_id, sp_all_playlists))
+      if sp_playlist != None:
+        sp_target_playlists.append(sp_playlist)
+        print(f"Playlist with ID {playlist_id} found: \"{
+              sp_playlist['name']}\"")
+      else:
+        print(f"Playlist with ID {playlist_id} not found")
+  else:
+    print("Syncing following playlists:")
+    print("  - Playlists starting with one of the following prefixes:")
+    for prefix in constants.SPOTIFY_PLAYLIST_PREFIXES:
+      print(f"    - \"{prefix}\"")
+    print("  - Playlists with the following names:")
+    for playlist_name in constants.SPOTIFY_PLAYLISTS:
+      print(f"    - \"{playlist_name}\"")
+    sp_target_playlists = list(filter(
+      lambda playlist: any(
+        map(lambda prefix: playlist['name'].startswith(prefix), constants.SPOTIFY_PLAYLIST_PREFIXES))
+        or playlist['name'] in constants.SPOTIFY_PLAYLISTS,
+      sp_all_playlists
+    ))
+  print(f"Syncing {len(sp_target_playlists)
+                   } Spotify playlist(s) to Rekordbox...")
 
   itunes_rate_limit_reached = False
 
@@ -269,12 +291,12 @@ def sync_spotify_playlists_to_rekordbox():
     has_custom_tracks = len(custom_tracks) > 0
     has_missing_tracks = playlist_sync_report['missing_tracks']['count'] > 0
 
-    if has_custom_tracks and has_missing_tracks:
+    if has_missing_tracks:
       log(f"  ❗ Skipping custom tracks because there are missing tracks in the original playlist. This may cause issues when adding or replacing tracks.")
       playlist_sync_report['custom_tracks_included'] = False
     elif not has_custom_tracks:
       log(f"  ⏩ No custom tracks found")
-    elif has_custom_tracks:
+    else:
       playlist_sync_report['custom_tracks_included'] = True
       log(f"  🎨 Applying custom tracks...")
       tracks_to_insert = []

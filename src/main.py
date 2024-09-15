@@ -13,15 +13,16 @@ def main():
     sys.exit(1)
 
   command = args[0]
+  command_args = args[1:]
 
   command_map = {
-    'sync': lambda _: sync_spotify_playlists_to_rekordbox(),
+    'sync': lambda playlist_ids: sync_spotify_playlists_to_rekordbox(playlist_ids),
     'search': lambda _: search_rekordbox_tracks(),
     'buy': lambda _: buy_tracks(),
   }
 
   if command in command_map:
-    command_map[command](args[1:])
+    command_map[command](command_args)
   else:
     raise ValueError(f"Command '{command}' not found")
 
