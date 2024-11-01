@@ -25,6 +25,7 @@ def buy_tracks():
   }
 
   missing_tracks_to_process = list(missing_tracks_without_ignored.items())
+  missing_tracks_to_process.sort(key=lambda x: x[1]["date_added"], reverse=True)
   total_missing_tracks_to_process = len(missing_tracks_to_process)
 
   latest_spinner = None
