@@ -27,6 +27,6 @@ SYNC_REPORT_FILE_NAME_PREFIX = 'sync_report_'
 CUSTOM_TRACKS_FILE_NAME = 'custom_tracks.yaml'
 
 SPOTIFY_PLAYLIST_PREFIXES = ['FLOW', 'SET', 'COL']
-SPOTIFY_PLAYLISTS = ['floatation', 'Toiletmuziek', 'waveyliq']
+SPOTIFY_PLAYLISTS = ['floatation', 'Toiletmuziek', 'waveyliq', 'KEYSORT']
 # SPOTIFY_PLAYLIST_PREFIXES = []
 # SPOTIFY_PLAYLISTS = ['SET_2024-08-24_HIGH-TEA-AFTER-DARK']

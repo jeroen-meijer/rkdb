@@ -15,8 +15,18 @@ from collections import namedtuple
 
 CustomTrack = namedtuple('CustomTrack', ['rekordbox_id', 'index', 'target'])
 
+# Notes
+# Typical spotify playlist link: https://open.spotify.com/playlist/1UObZqUr1MtbveqsSw6sFP?si=5d14331bb8174c1e
+# Everything after the last slash is the playlist ID, until and not including the question mark (if any)
+# We will want to parse the playlist ID from the URL
+# The custom_playlist_ids arg may contain any number of playlist IDs _or_ playlist URLs.
+# The URLs need to be parsed to get the playlist ID, and this new list should override the custom_playlist_ids list.
+
 
 def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
+  custom_playlist_ids = list(
+    map(lambda id: id.split('/')[-1].split('?')[0], custom_playlist_ids))
+
   rb = setup_rekordbox()
   sp = setup_spotify()
 
