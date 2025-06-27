@@ -1,0 +1,90 @@
+# YAML Schema for custom_tracks.yaml
+# This schema defines the structure for custom track configurations
+# that allow replacing or inserting tracks in Spotify playlists
+
+$schema: http://json-schema.org/draft-07/schema#
+$id: custom_tracks_schema.yaml
+title: Custom Tracks Configuration Schema
+description: Schema for configuring custom track replacements and insertions in Spotify playlists
+
+type: object
+required: [custom_tracks]
+properties:
+  custom_tracks:
+    type: object
+    description: Root container for custom track configurations
+    required: [spotify]
+    properties:
+      spotify:
+        type: object
+        description: Custom track configurations for Spotify playlists
+        patternProperties:
+          # Spotify playlist IDs (22 character alphanumeric strings)
+          "^[a-zA-Z0-9]{22}$":
+            type: array
+            description: Array of custom track configurations for a specific playlist
+            items:
+              type: object
+              required: [rekordbox_id]
+              properties:
+                rekordbox_id:
+                  type: integer
+                  description: The Rekordbox track ID to use for this custom track
+                  minimum: 1
+                type:
+                  type: string
+                  enum: [insert, replace]
+                  default: insert
+                  description: |
+                    - 'insert': Add this track to the playlist (default if not specified)
+                    - 'replace': Replace an existing track with this one
+                index:
+                  type: integer
+                  description: |
+                    For 'insert' type: Position to insert the track (0-based).
+                    If not specified, track is appended to the end.
+                    If 0, track is inserted at the beginning.
+                    For 'replace' type: Position of track to replace (0-based).
+                offset:
+                  type: integer
+                  description: |
+                    Alternative to 'index' for specifying position.
+                    Offset relative to the target track position.
+                position:
+                  type: integer
+                  minimum: 1
+                  description: |
+                    Alternative to 'index' for specifying position (1-based).
+                    Will be converted to 0-based index internally.
+                target:
+                  type: integer
+                  description: |
+                    For 'insert' type: Rekordbox ID of the track to insert relative to.
+                    For 'replace' type: Rekordbox ID of the track to replace.
+                    If not specified for 'replace', uses 'index' to find track by position.
+              additionalProperties: false
+
+              # This block creates two mutually exclusive validation paths
+              # based on whether the 'type' property is present.
+              oneOf:
+                # Path 1: Use this validation path if 'type' is explicitly defined.
+                - required: [type]
+                  allOf:
+                    # An additional check for when type is 'replace'.
+                    - if:
+                        properties:
+                          type:
+                            const: replace
+                      then:
+                        anyOf:
+                          - required: [index]
+                          - required: [target]
+
+                # Path 2: Use this validation path if 'type' is NOT defined.
+                # This correctly handles implicit 'insert' actions.
+                - not:
+                    required: [type]
+
+        additionalProperties: false
+    additionalProperties: false
+additionalProperties: false

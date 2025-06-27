@@ -12,6 +12,7 @@ from functions import attempt_get_key, ensure_custom_track_schema, ensure_track_
 from services import setup_rekordbox, setup_spotify
 from requests import JSONDecodeError
 from collections import namedtuple
+import traceback
 
 CustomTrack = namedtuple('CustomTrack', ['rekordbox_id', 'index', 'target'])
 
@@ -75,6 +76,8 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
     ),
     map_elements=lambda res: res['items'],
   )
+  sp_all_playlists = list(
+    filter(lambda playlist: playlist != None, sp_all_playlists))
 
   print(f"Found {len(sp_all_playlists)} playlist(s)")
 
@@ -148,6 +151,7 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
         sp_playlist['id'],
         offset=offset,
         limit=limit,
+        # fields=['items(track(id,artists,name,added_at))']  # Check
       ),
       # For each res, get the items, and map each of those items to the 'track'
       map_elements=lambda res: list(
@@ -297,14 +301,13 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
     # Get the custom_tracks_db entry for this playlist, otherwise empty list
     custom_tracks = custom_tracks_db.get('custom_tracks', {}).get('spotify', {}).get(
       sp_playlist['id'], [])
+    if custom_tracks is None:
+      custom_tracks = []
 
     has_custom_tracks = len(custom_tracks) > 0
     has_missing_tracks = playlist_sync_report['missing_tracks']['count'] > 0
 
-    if has_missing_tracks:
-      log(f"  ❗ Skipping custom tracks because there are missing tracks in the original playlist. This may cause issues when adding or replacing tracks.")
-      playlist_sync_report['custom_tracks_included'] = False
-    elif not has_custom_tracks:
+    if not has_custom_tracks:
       log(f"  ⏩ No custom tracks found")
     else:
       playlist_sync_report['custom_tracks_included'] = True
@@ -317,13 +320,25 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
           log(f"  ❌ Skipping custom track with missing rekordbox ID")
           continue
 
-        c_type = custom_track['type']
+        c_type = custom_track.get('type', 'insert')  # Default to 'insert' if no type specified
 
         c_rb = first_or_none(
           filter(lambda track: track.ID == c_rb_id, rb_all_tracks))
         if c_rb == None:
           log(f"  ❌ Skipping custom track with unknown rekordbox ID {c_rb_id}")
           continue
+
+        # Validate that only one position field is provided
+        position_fields = []
+        if custom_track.get('index') is not None:
+          position_fields.append('index')
+        if custom_track.get('offset') is not None:
+          position_fields.append('offset')
+        if custom_track.get('position') is not None:
+          position_fields.append('position')
+        
+        if len(position_fields) > 1:
+          raise ValueError(f"Custom track {c_rb_id} has multiple position fields specified: {position_fields}. Only one of 'index', 'offset', or 'position' can be used.")
 
         c_index = custom_track.get('index', None)
         if c_index == None:
@@ -342,11 +357,22 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
         c = CustomTrack(rekordbox_id=c_rb_id, index=c_index, target=c_target)
 
         if c_type == 'insert':
+          # Always allow insert tracks, regardless of missing tracks
           tracks_to_insert.append(c)
         elif c_type == 'replace':
+          # Always allow replace tracks, regardless of missing tracks
           tracks_to_replace.append(c)
         else:
           log(f"Skipping custom track with unknown type '{c_type}'")
+
+      if len(tracks_to_insert) == 0 and len(tracks_to_replace) == 0:
+        log(f"  ⏩ No custom tracks found")
+        playlist_sync_report['custom_tracks_included'] = False
+      else:
+        if has_missing_tracks:
+          log(f"  ⚠️  Applying custom tracks (some original tracks are missing)")
+        else:
+          log(f"  ✅ All custom tracks will be applied")
 
       rb_playlist_tracks_by_index = [
         # (original_index, track, is_custom)
@@ -361,12 +387,23 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
             target_index_or_offset = 0
           # Find the position in rb_playlist_tracks_by_index where the track with the target_track_id is.
           # Then add the target_index_or_offset to its index to get the target index.
+          found_target = False
           for index, (index_from_playlist_or_custom, track, is_custom) in enumerate(rb_playlist_tracks_by_index):
             if track == target_track_id:
               target_index = index_from_playlist_or_custom + target_index_or_offset
+              found_target = True
               break
+          if not found_target:
+            log(f"  ⚠️  WARNING: Custom track {rb_id} references missing target track ID {target_track_id}. It will not be inserted at the intended position.")
+            # Optionally, append to end
+            target_index = None
         else:
           target_index = target_index_or_offset
+
+        # If index is out of bounds, warn and append to end
+        if target_index is not None and (not isinstance(target_index, int) or target_index < 0 or target_index > len(rb_playlist_tracks_by_index)):
+          log(f"  ⚠️  WARNING: Custom track {rb_id} specifies out-of-bounds index {target_index}. Appending to end.")
+          target_index = None
 
         # Initialize an empty list for the tracks to insert at this index if it doesn't exist yet.
         if target_index not in tracks_to_insert_grouped:
@@ -382,87 +419,48 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
 
       for target_index, tracks in tracks_to_insert_grouped.items():
         # Find the spot in rb_playlist_tracks_by_index where we append the track.
-        # This spot can be found by finding the first track with an index higher than the current index,
-        # and inserting it before that track.
-        # We also need to keep in mind if the list is empty or if the index is higher than the highest index.
-
-        # The `insert_index` refers to the index in the `rb_playlist_tracks_by_index` list where we will insert the track.
         insert_index = 0
-
-        # The resulting list may look like:
-        # - (0, custom_track_1)
-        # - (0, custom_track_2)
-        # - (1, original_track_1)
-        # - (1, custom_track_3)
-        # - (2, original_track_2)
-        # etc.
-
-        # GOAL: Find the index in the `rb_playlist_tracks_by_index` where its song index (the first element in the tuple)
-        # is higher than the target index. Then, we insert the track at that index, pushing the existing track at that
-        # index and all following tracks one index higher.
-        # For example, inserting (0, test_track) into the list above would result in:
-        # - (0, custom_track_1)
-        # - (0, custom_track_2)
-        # - (0, test_track)
-        # - (1, original_track_1)
-        # - (1, custom_track_3)
-        # ...
-        # If the playlist empty, or the target index is higher than the highest index, we append the track to the end.
-        # Important: If multiple entries in the list have the same index, the track will be inserted after all of them.
-        # So, doing multiple inserts at the same index will result in the tracks being inserted in the order they were added.
-        # For example, inserting (0, test_track_1) and (0, test_track_2) would result in:
-        # - (0, custom_track_1)
-        # - (0, custom_track_2)
-        # - (0, test_track_1)
-        # - (0, test_track_2)
-        # - (1, original_track_1)
-        # - (1, custom_track_3)
-        # ...
-
-        # Example case to help building: we want to insert a track at index 1,
-        # and the list looks like this: [(0, track1, False), (1, track2, False), (2, track3, False)].
-        # The track should be inserted before track3, since track3's index is the first in the list that
-        # is higher than the target index.
-
-        # If the list is empty, we insert at the start.
-        # If
-
+        inserted = False
         for index_in_list, (index_from_playlist_or_custom, track, is_custom) in enumerate(rb_playlist_tracks_by_index):
           if index_from_playlist_or_custom is not None and index_from_playlist_or_custom > target_index:
             insert_index = index_in_list
+            inserted = True
             break
           insert_index = index_in_list + 1
-
-        log(f"  ├ Inserting {len(tracks)} custom track(s) at index {
-            target_index}: {tracks}")
+        if not inserted and target_index is not None and target_index > len(rb_playlist_tracks_by_index):
+          log(f"  ⚠️  WARNING: Custom track(s) intended for index {target_index} but playlist is shorter. Appending to end.")
+        log(f"  ├ Inserting {len(tracks)} custom track(s) at index {target_index}: {tracks}")
         for rb_id in tracks:
           rb_playlist_tracks_by_index.insert(
             insert_index, (target_index, rb_id, True))
           insert_index += 1
 
       for rb_id, target_index, target_track_id in tracks_to_replace:
+        replaced = False
         if target_index != None:
           # Find the track in the playlist with the index that matches the target_index.
-          # Then, replace that track with the custom track.
           for index, (index_from_playlist_or_custom, track, is_custom) in enumerate(rb_playlist_tracks_by_index):
             if index_from_playlist_or_custom == (target_index + 1) and not is_custom:
-              log(f"  ├ Replacing track with ID {track} at index {
-                  target_index} with custom track {rb_id}")
+              log(f"  ├ Replacing track with ID {track} at index {target_index} with custom track {rb_id}")
               rb_playlist_tracks_by_index[index] = (target_index, rb_id, True)
+              replaced = True
               break
+          if not replaced:
+            log(f"  ⚠️  WARNING: Could not replace track at index {target_index} (not found). Custom track {rb_id} not inserted.")
         else:
           # Find the track in the playlist with an ID that matches the target_track.
-          # Then, replace that track with the custom track.
           for index, (index_from_playlist_or_custom, track, is_custom) in enumerate(rb_playlist_tracks_by_index):
             if track == target_track_id:
-              log(f"  ├ Replacing track with ID {
-                  track} with custom track {rb_id}")
+              log(f"  ├ Replacing track with ID {track} with custom track {rb_id}")
               rb_playlist_tracks_by_index[index] = (
                 index_from_playlist_or_custom, rb_id, True)
+              replaced = True
+          if not replaced:
+            log(f"  ⚠️  WARNING: Could not replace track with target ID {target_track_id} (not found). Custom track {rb_id} not inserted.")
 
-          # Now we have a list of tracks that should be in the playlist, with the custom tracks inserted at the correct index.
-          # We can now create the final tracklist by mapping the list to its ID and then looking up the tracks.
-          # Then we remove all songs from the playlist and add the new ones in the correct order.
+      # Now we have a list of tracks that should be in the playlist, with the custom tracks inserted at the correct index.
+      # We can now create the final tracklist by mapping the list to its ID and then looking up the tracks.
+      # Then we remove all songs from the playlist and add the new ones in the correct order.
 
       final_tracklist_ids = list(
         map(lambda entry: entry[1], rb_playlist_tracks_by_index))
@@ -504,6 +502,7 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
           humanfriendly.format_timespan(end_datetime - start_datetime)}")
   except Exception as e:
     print(f"Interrupted or crash detected:\n{e}\n")
+    traceback.print_exc()
     save_dbs()
     print("Exiting")
     sys.exit(130)

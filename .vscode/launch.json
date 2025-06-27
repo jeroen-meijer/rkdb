@@ -9,7 +9,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/src/main.py",
-      "args": ["sync"],
+      "args": ["sync", "0usXtvZs21qyg5LNSAsBjK"],
       "console": "integratedTerminal",
       "justMyCode": false
     },
@@ -28,6 +28,15 @@
       "request": "launch",
       "program": "${workspaceFolder}/src/main.py",
       "args": ["buy"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Run: get playlist",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/get_playlist.py",
+      "args": ["5DSl5ZztY60k7jN7u4hhVG"],
       "console": "integratedTerminal",
       "justMyCode": false
     }
