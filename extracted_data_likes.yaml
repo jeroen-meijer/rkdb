@@ -1,0 +1,900 @@
+artists:
+  koan_sound:
+    id: 1NCLweIUpq8knzemBwAwoo
+    name: KOAN Sound
+  gentlemens_club:
+    id: 58MEqEE2029jp6KTWTt1hO
+    name: Gentlemens Club
+  t95_and_eksman:
+    id: 2u9FEXH97Q1UBg5bFyeVEs
+    name: T95 & Eksman
+  flint_and_figure:
+    id: 4UJP03mzC9b90Qq1TqavvN
+    name: Flint & Figure
+  wolf_pax:
+    id: 3OmR1a4P4PcnigeY2Rv7p8
+    name: Wolf Pax
+  liz_zy:
+    id: 3KENikA684bwDg9m7t8YRJ
+    name: Liz-zy
+  auris:
+    id: 6v98GNlgDGhqorMTKZZgm6
+    name: Auris
+  rizzle:
+    id: 4iRIqU5BgvJ14Q3qQntvyH
+    name: Rizzle
+  azotix:
+    id: 5ZdqCYEicA2uEyan7znlKI
+    name: Azotix
+  waeys:
+    id: 2I5WzC6NbIiTydDnvGGTu9
+    name: Waeys
+  rueben:
+    id: 3qs7vj8U0tSMFdX2FfzODe
+    name: Rueben
+  blacklab:
+    id: 0iHwD0UgvY4sez9HUMBY4L
+    name: Blacklab
+  hugh_hardie:
+    id: 0ZlH3VG6iAeC1KVzNz6rqW
+    name: Hugh Hardie
+  mitekiss:
+    id: 1yOKWVERbo2WSQb9kcsNbH
+    name: Mitekiss
+  duskee:
+    id: 3f2xeagPNM6X9FktDTIudH
+    name: Duskee
+  emiko:
+    id: 2NbRNksMb0FCEGfUerK1a6
+    name: Emiko
+  olivia_dean:
+    id: 00x1fYSGhdqScXBRpSj3DW
+    name: Olivia Dean
+  technimatic:
+    id: 1LhB1j0Zq3tjBeG3k8gq7V
+    name: Technimatic
+  kyrist:
+    id: 7yr3XMGUy9WwHmk90NMRsN
+    name: Kyrist
+  document_one:
+    id: 70E0CLEf2H8hCo06gHJ7tu
+    name: Document One
+  satl:
+    id: 6OwnHoDYszPivlUgbApZbR
+    name: Satl
+  ellis_esco:
+    id: 6hNAUTyDsn4G6ZDXgDvwZ4
+    name: Ellis Esco
+  milansangar:
+    id: 5gBt0JCzrJ3uc9zxFVZZHb
+    name: Milansangar
+  verbz:
+    id: 2GLeuQsqfwk8iIkqyp1c3w
+    name: Verbz
+  starjunk_95:
+    id: 523iXWyHL26prJR3GKjRhx
+    name: Starjunk 95
+  tom_dune:
+    id: 4rsYxrErSIJWxHEIwL0kl3
+    name: Tom Dune
+  floonk:
+    id: 4ZzqskD9slkLlmzd5kiEnM
+    name: FLOONK
+  kaylee:
+    id: 31w0rQlEGNdJirh5C3fSwL
+    name: Kaylee
+  iyre:
+    id: 4lOMuHPiA5TrLjPk1aseIc
+    name: IYRE
+  note:
+    id: 7bceROJifNdPvRoSeRFQuI
+    name: Note
+  emperor:
+    id: 0qpokmnvq1MOYl954iVq7x
+    name: Emperor
+  levela:
+    id: 0sDeXbVK3kNuzYQlVib9ib
+    name: Levela
+  absent_chronicles:
+    id: 1WSsJkMrQi0G4nMZ1ad8nx
+    name: Absent Chronicles
+  skarba:
+    id: 3aqECEZYUOMHyG2Hh12zpO
+    name: SKARBA
+  trinist:
+    id: 6XTrviAQeBuCkWgDenoiId
+    name: Trinist
+  toer_greve:
+    id: 554ABuu3LXGQxoZany6AP2
+    name: Toer Greve
+  ariel_hill:
+    id: 2Hmyc8drOe1UJpzH7XOf51
+    name: Ariel Hill
+  hudson_lee:
+    id: 15wwDN0ZICXvhJLfom0hCt
+    name: Hudson Lee
+  frequent:
+    id: 71Q5SkUpc26h0swrRjrGEc
+    name: Frequent
+  boxxy:
+    id: 42d3KRlNsJOqTEtpEL0SGQ
+    name: Boxxy
+  siska:
+    id: 0Kw1OnkbTfAEsXB2CnpM5P
+    name: SISKA
+  shogun_audio:
+    id: 4JDJd4eld2k95Vj7YTe8rU
+    name: Shogun Audio
+  trex:
+    id: 6mjeZiv0fgNA0mbDWlSSug
+    name: Trex
+  nathan_smoker:
+    id: 3nNXwfR504VYz5FoUdoYRN
+    name: Nathan Smoker
+  explorers_of_the_internet:
+    id: 3DiAzykvjcMWUCjVJ8ofhW
+    name: Explorers of the Internet
+  oppidan:
+    id: 338p7qzZTDJSHJzSjIZMFK
+    name: Oppidan
+  sleep_token:
+    id: 2n2RSaZqBuUUukhbLlpnE6
+    name: Sleep Token
+  bluewerks:
+    id: 4ELcaEK7UaF0mUoodoVBfn
+    name: Bluewerks
+  hans_glader:
+    id: 2xncrpOGGRImOgiWmbAPZG
+    name: Hans Glader
+  cam_james:
+    id: 1eoHH8E3CMRVvbPzvg3uc5
+    name: Cam James
+  alfs:
+    id: 5T7Z86YlQpQ1Pau9mRLZuq
+    name: Alfs
+  telomic:
+    id: 2uCrvTUHRA9kuW4IA67oDn
+    name: Telomic
+  basstripper:
+    id: 1tSiIyp5dxfbEaS0nZGMEl
+    name: Basstripper
+  skantia:
+    id: 0FZS1HlJfonbMpQGzTrh0M
+    name: skantia
+  dlr:
+    id: 6kgD8l1FG4hgYgW9kk0dvs
+    name: DLR
+  kathryn_brenna:
+    id: 5O1ehFx9nNbc8XOe2l4dVc
+    name: Kathryn Brenna
+  wilkinson:
+    id: 6m8itYST9ADjBIYevXSb1r
+    name: Wilkinson
+  camo_and_krooked:
+    id: 2N8IPNZTiNo3nj4mreOlHU
+    name: Camo & Krooked
+  mefjus:
+    id: 54qqaSH6byJIb8eFWxe3Pj
+    name: Mefjus
+  ilira:
+    id: 6mzs66iVW15C5iLt0JLt41
+    name: ILIRA
+  alyness:
+    id: 7MJmPeTP3ixYW1yTXNmkoS
+    name: Alyness
+  sammy_virji:
+    id: 1GuqTQbuixFHD6eBkFwVcb
+    name: Sammy Virji
+  skepta:
+    id: 2p1fiYHYiXz9qi0JJyxBzN
+    name: Skepta
+  flava_d:
+    id: 682SntJ7VKoFfssPfDAmDZ
+    name: Flava D
+  solah:
+    id: 4jrJBSg0c2qx8SMGa7ququ
+    name: SOLAH
+  emba:
+    id: 5scIsOrV9flbeOPUtdv24H
+    name: Emba
+  cooky:
+    id: 1gIG3PQXZfplVilbDBdzap
+    name: Cooky
+  oktae:
+    id: 4PxFr57PZWOCVJ5HkJyaoD
+    name: Oktae
+  foreign_mercy:
+    id: 6CZ3UDXZJ5In2W2jzTrvvE
+    name: FOREIGN MERCY
+  rpm:
+    id: 3ZSdAMsLr4YLHCP14AVKtl
+    name: RPM
+  kmb:
+    id: 0ihliQqviJjnWKiG0XSRqN
+    name: KMB
+  koherent:
+    id: 2648rIoX4aFFXNipSvyBUD
+    name: Koherent
+  collette_warren:
+    id: 2pzGbNf0oadczuFlVAxZC3
+    name: Collette Warren
+  teej:
+    id: 6Ul7DXJIfPhwGBIP3J96U7
+    name: Teej
+  that_franco:
+    id: 7g1wGpkV1xFxx6APTrp7bv
+    name: That Franco
+  hutcher:
+    id: 2nwnPxZXwF9Mfaik9pQNXI
+    name: Hutcher
+  alex_bone:
+    id: 2iL6iQOjN0zrskyJHksaEJ
+    name: Alex Bone
+  "sa\xEFna":
+    id: 0jcS0qoHrcByHrVFgc2UX9
+    name: "Sa\xEFna"
+  naike:
+    id: 4eWMajurKslYrmKKz4MTRu
+    name: Naike
+  monika:
+    id: 38BFYN3khru2n281KjI4Nd
+    name: Monika
+  sydney_bryce:
+    id: 57wU47pYKEcHOfb97oeSy6
+    name: Sydney Bryce
+  envy:
+    id: 00YRVhQFlwO1OhSyWyT9pU
+    name: En:vy
+  noppo:
+    id: 4bFw5cibhGOOZn1ruUPDZ4
+    name: Noppo
+  amoss:
+    id: 4dQKaBHBXpgWvb9iS2K0Gt
+    name: Amoss
+  objectiv:
+    id: 19iNG6jToD6Yb2dwVtnpf7
+    name: Objectiv
+  skybreak:
+    id: 2858y2JiMYIst8dY4WXGi3
+    name: Skybreak
+  regrowth:
+    id: 5bAT42AvILGq4MNeGJhiAv
+    name: Re:growth
+  alb:
+    id: 1vQl67dVhKspv7RXPtsBzH
+    name: ALB
+  anni:
+    id: 2DMjf1zRMCb3iRLmUUvO9c
+    name: ANNI
+  enei:
+    id: 6X3QjCYg5HcTwO5FPVQj0J
+    name: Enei
+  divicioux:
+    id: 6H4cJ2yFafSqcjwdx4BO5Q
+    name: DIVICIOUX
+  howlan:
+    id: 0ZmunMZUP2AH3nPuoNRILY
+    name: Howlan
+  flow_control:
+    id: 1P0eJWcpBEOVQ6Z7f3rnkC
+    name: Flow Control
+  finding_hope:
+    id: 0QGDb8TBWIT06W4BoyAggg
+    name: Finding Hope
+  direct:
+    id: 5eOyDcFvvdc7D7BD6gCdsi
+    name: Direct
+  higgo:
+    id: 0f1qSxprIDtLaJfIaEJb64
+    name: Higgo
+  piri:
+    id: 4DpmPt7gfAAq7WEx0E1X8s
+    name: piri
+  limewax:
+    id: 1mCm9sqidA8YS31nVyvlXM
+    name: Limewax
+  switch_technique:
+    id: 6Vh8H80QdaXyQYGjEpzuCY
+    name: Switch Technique
+  jessie_reyez:
+    id: 3KedxarmBCyFBevnqQHy3P
+    name: Jessie Reyez
+  black_caviar:
+    id: 1wqW0IQWC7V7jktcjVHID6
+    name: Black Caviar
+  blossom:
+    id: 0FhgVFxDmcXH3blEWtt13V
+    name: Blossom
+  ella_rosa:
+    id: 1qHw9CyK6GsvipKuY7J70F
+    name: Ella Rosa
+  indigo_eyes:
+    id: 04qGSeuOlRDSyVYFblRy9O
+    name: Indigo Eyes
+  douvelle19:
+    id: 3EjNHY8UswIZAxMjqXewVH
+    name: Douvelle19
+  vrdnyn:
+    id: 6Gq2D2UOJNriDLfSPR6Y2Y
+    name: Vrdnyn
+  nicknames:
+    id: 1y2mXaGQXFVnHm5QuEz5xO
+    name: Nicknames
+  lenlip:
+    id: 03ql9Glw4PXZv23fhAQDub
+    name: Lenlip
+  jackson_homer:
+    id: 0W9bMhPWFmnO2u2ejaVDlC
+    name: Jackson Homer
+  devin_tracy:
+    id: 6MfKvHA64hLnQEJ9E5M7FT
+    name: Devin Tracy
+  halogenix:
+    id: 24eQxPRLv3UMwEIo6mawVW
+    name: Halogenix
+  sixis:
+    id: 6znIFHkOIAcFakatlBL6x6
+    name: Sixis
+  yoofee:
+    id: 0KoziTqE9AN9MrAWeTRGKI
+    name: Yoofee
+  inlie:
+    id: 49Cw2UzAPedUfYc9zCpdPi
+    name: Inlie
+  shift_k3y:
+    id: 26OrZl5U3VNGHU9qUj8EcM
+    name: Shift K3Y
+  arlo:
+    id: 2Ur1MpOU6IZEVyPvs2IBUW
+    name: Arlo
+  emi_grace:
+    id: 0U6MHJ9KRB5A1M7iHN06sS
+    name: Emi Grace
+  knght:
+    id: 2BVKNVPlti0PGxW8dZCAOe
+    name: KNGHT
+  hiraeth:
+    id: 0UVwpbhVw6uIeso94u6mYR
+    name: Hiraeth
+  keenan_mundane:
+    id: 1APR3mkX7fOR0u1kRnsUbG
+    name: Keenan Mundane
+  informal_:
+    id: 7rhckctF71vE4BtpFzz7Ie
+    name: informal.
+  billie_eilish:
+    id: 6qqNVTkY8uBg9cP3Jd7DAH
+    name: Billie Eilish
+  artist_33_below:
+    id: 4tMIsBBR8M0PsorDf0mNEz
+    name: 33 Below
+  daniel_allan:
+    id: 5JQ1XqKJ2Art01rF4tu1Ra
+    name: Daniel Allan
+  yoshuu:
+    id: 7uhbbUKgEuWSiMa4YerMps
+    name: YOSHUU
+  screamarts:
+    id: 2WLKRiOp43XLwVhRdt46mH
+    name: Screamarts
+  exea:
+    id: 6o5a5m7Apq53U0ghpGjj4H
+    name: EXEA
+  aaron_payne:
+    id: 3mhYyyPofi8S3e29boIKzk
+    name: Aaron Payne
+  break:
+    id: 7FtCGMC0pcHPlrZWmYe9XM
+    name: Break
+  charli_brix:
+    id: 27Sc6g0Utbc8hvWrzTFVc8
+    name: Charli Brix
+  vypes:
+    id: 0IQ5yrph2V4nC6QbZpRhQH
+    name: Vypes
+  astreaux:
+    id: 0fILAgoWUeFdNo756JBGM5
+    name: Astreaux
+  maysev:
+    id: 7D0ihtT4bfM42Hx6qPI8Az
+    name: Maysev
+  "kr\xE6k":
+    id: 37ZxBGGKIBseNd5I0R3sE2
+    name: "KR\xC6K"
+  ob:
+    id: 5hRHq7XsNhclYjTHu0CYHA
+    name: OB
+  india_shan:
+    id: 5U7ed4eqjReC376kSJKfs8
+    name: India Shan
+  styke:
+    id: 04uDzME9wvWKxTlDT0NTql
+    name: Styke
+  fryware:
+    id: 5hvR80ZuQm5TWMu23iLqiQ
+    name: Fryware
+  "\u012Bnk\u016Bbe":
+    id: 5K9eVr36xlOz5JfrulzZhU
+    name: "\u012Bnk\u016Bbe"
+  etherwood:
+    id: 3GEUIa3Z0Qlivy3EcJm5RX
+    name: Etherwood
+  gifta:
+    id: 77E1FYxC4buHGc5me0PT5t
+    name: Gifta
+  telm_and_wilson:
+    id: 5NQKjTStmJVyzmjoUpLdtp
+    name: Telm & Wilson
+  dub_ten:
+    id: 7wtKcfTDDiIkSA4giHPsP3
+    name: Dub Ten
+  flowanastasia:
+    id: 6AAhs4ooZ8UUIuuhWj1ZjM
+    name: flowanastasia
+  imo_lu:
+    id: 5H13I6EsiXG7ZuZcqE6Ihg
+    name: imo-Lu
+  genetics:
+    id: 2TtirRFdqoWG9avOqFKGWI
+    name: Genetics
+  amber_jay:
+    id: 7DLxDPwjWekXl5meKBu2Ob
+    name: Amber Jay
+  dossa:
+    id: 7KHm6mL7xNRACVaDkhrgiq
+    name: Dossa
+  eluun:
+    id: 7LySsKIRvri6Ye5kUv47DQ
+    name: Eluun
+  akov:
+    id: 25HLeHJABQlPaCpS2AgCf0
+    name: AKOV
+  tremmor:
+    id: 6Q8ufM8wJ7KA2LXhAgG0Dx
+    name: Tremmor
+  sano:
+    id: 2fYh4RB842at1z0mXNr64t
+    name: Sano
+  visla:
+    id: 5tnwAGNwPmHjpqYVBXy82t
+    name: VISLA
+  hyst:
+    id: 13M3ngOiflqK7mR7Q8J4Aa
+    name: HYST
+  zero:
+    id: 6ocDQwCTkVro3cmejcF1DH
+    name: Zero
+  tyr_kohout:
+    id: 2MN6TrVzExjk1PnlyVvRAq
+    name: Tyr Kohout
+  wampa:
+    id: 67sK9bHzlRspkGHqXjR04R
+    name: Wampa
+  under_above:
+    id: 4k83yzQaZNeCZujEf03U8i
+    name: Under Above
+  dj_jackum:
+    id: 0d44JahSUHqjM6UTn1y8IX
+    name: DJ Jackum
+  nikita_the_wicked:
+    id: 0Kc65Qv0ju9H2cMNnP3Tqd
+    name: Nikita, the Wicked
+  darby:
+    id: 6rErJmMCoNHUX0Z99uBB8m
+    name: Darby
+  nymfo:
+    id: 2Pdhwac5oHsY95PeUq6VBS
+    name: Nymfo
+  roos_jonker:
+    id: 7zKcaqZKaQv5O6oZYBoFBf
+    name: Roos Jonker
+  catching_cairo:
+    id: 1MW1wqNtF2hNgsPfGDhrHB
+    name: Catching Cairo
+  fade_black:
+    id: 6lczpQaXIogAbhZfhVOiEe
+    name: Fade Black
+  pegboard_nerds:
+    id: 0lLY20XpZ9yDobkbHI7u1y
+    name: Pegboard Nerds
+  splitbreed:
+    id: 3Fe5n1HNeOPaDPwcPIx6Qc
+    name: SPLITBREED
+  eli_teddy:
+    id: 0GiuTQ5OPAG2qHBDl41qHL
+    name: Eli Teddy
+  tanuki:
+    id: 5n3X0T0RlvRxUR6l9dBwB8
+    name: TANUKI
+  paige_eliza:
+    id: 6zwVg9raWBJhhCpd8Etrey
+    name: Paige Eliza
+  drs:
+    id: 0WCfu8x76QX3CjVgiE3Hn2
+    name: DRS
+  lokal:
+    id: 6xA7gLda7ySE6nczMcHw3C
+    name: Lokal
+  freddy_b:
+    id: 6Sqc5i3SuqbWsuwB3uDafF
+    name: Freddy B
+  scurrow:
+    id: 3mFSfa0EOCZI8HEXGTH6UU
+    name: Scurrow
+  makoto:
+    id: 4CBavfYzjrTvV7xCIq6WQu
+    name: Makoto
+  l_side:
+    id: 3Y59xKAazzqr4AwzF6LYfR
+    name: L-Side
+  wingz:
+    id: 0qBdx1zHFyHsFLd2nG5ezW
+    name: Wingz
+  kelvin_373:
+    id: 2dfy5XzFykgcuyOaUhMlrD
+    name: Kelvin 373
+  selecta_j_man:
+    id: 25UCJWhCAOcXmm7i4hLyNP
+    name: Selecta J-Man
+  falcon:
+    id: 5W6eaI59GB6awkeYmgpzN8
+    name: Falcon
+  watch_the_ride:
+    id: 6nagLG9dZzeqtMQCYMO9RC
+    name: Watch the Ride
+  emz:
+    id: 42uWTOhFxOD21pXuBmuEp9
+    name: Emz
+  zara_kershaw:
+    id: 1RlBDEXSFnqeYBx70UxZn2
+    name: Zara Kershaw
+  aquario:
+    id: 2nmGlLFpun4vJGhntX0gkc
+    name: Aquario
+  mohican_sun:
+    id: 7LzWa2AUty3RU0znyhG70N
+    name: Mohican Sun
+  dustkey:
+    id: 3cFmkfAFtVpp40znDmCo0d
+    name: Dustkey
+  arcando:
+    id: 0ycvq8upLhNmddPdQXhLOy
+    name: Arcando
+  pirapus:
+    id: 7KgEOoJ0CawH7NOaLe34Qe
+    name: Pirapus
+  primitive_instinct:
+    id: 5zaqutowWQbaqpy0PNQbiC
+    name: Primitive Instinct
+  degs:
+    id: 7gYMOxGbwZZgvaOc6z5VJG
+    name: Degs
+  nutone:
+    id: 7pDBRy9uWy1zq5b0uXIABQ
+    name: Nu:Tone
+  trail:
+    id: 2A83umpkQxHuNcL3ahaAvd
+    name: Trail
+  a_d_o_r_:
+    id: 5dniQPRxD0LDjCqMI4rvrM
+    name: A.D.O.R.
+  big_miz:
+    id: 16bJAXH14R42AnpN0FtaQo
+    name: Big Miz
+  blooom:
+    id: 3Xtaqhj8MygkfndSArQOOS
+    name: Blooom
+  wolfy_lights:
+    id: 1VzKsrHWSH4Ij7dTWfPe7z
+    name: Wolfy Lights
+  marvel_cinema:
+    id: 7iAspBR82BCoNuceIgKLm1
+    name: Marvel Cinema
+  moonaddict:
+    id: 3F5sppuhVSClZlpmEp2fkF
+    name: Moonaddict
+  monty:
+    id: 2w5c2l70mYNDdSLifFyZjJ
+    name: Monty
+  indira_may:
+    id: 4PStVha6j7ZX2DNtWwIR24
+    name: Indira May
+  visages:
+    id: 1QEJm4mWKmrboH7if0CYoL
+    name: Visages
+  lsb:
+    id: 7M5ogsZnEm96Va8wLKvftN
+    name: LSB
+  loss:
+    id: 5sosymdzX1UsUhFHsWJwiL
+    name: LOSS
+  enigma_dubz:
+    id: 7ygSJBM6sZ0vXGJvjnL1V5
+    name: ENiGMA Dubz
+  bensley:
+    id: 3SfEKS85dj9v75ROsWJSiL
+    name: Bensley
+  hoax:
+    id: 3W1enT2cxmP2PjLG5zwmby
+    name: Hoax
+  red_velvet:
+    id: 1z4g3DjTBBZKhvAroFlhOM
+    name: Red Velvet
+  operate:
+    id: 60j2M5PC8KpsahjNL6T2OO
+    name: Operate
+  s_p_y:
+    id: 6aJAd8zM1s3Slw64KfsmaF
+    name: S.P.Y
+  alibi:
+    id: 64AcsjHBz0mv71VKuQfmXV
+    name: Alibi
+  qzb:
+    id: 7DrL4NTd8JcbCpxOvdCnV9
+    name: QZB
+  marea:
+    id: 4IKPB8W9WIyQ7imXh9x63Y
+    name: MAREA
+  dotdash:
+    id: 0OL4n07lDlKxpsKRrFhofx
+    name: dotdash
+  lucy_dacus:
+    id: 07D1Bjaof0NFlU32KXiqUP
+    name: Lucy Dacus
+  nais:
+    id: 6LzlY9HXI9IkOBWYCb04zG
+    name: Nais
+  lowqui:
+    id: 5y2zJl34nBW6vP0v6tkXwC
+    name: Lowqui
+  ric_waves:
+    id: 290b7FiG8ePIb0VaLosR49
+    name: Ric Waves
+  jrace_and_albert_white:
+    id: 14EbMeo70EouJ5Nmrr6ySM
+    name: Jrace & Albert White
+  latemove:
+    id: 656GGyV16LNtanmQwYkxiF
+    name: LATEMOVE
+  jrace:
+    id: 1E9e44sSruWnb1P0aIRvwY
+    name: Jrace
+  albert_white:
+    id: 1ztEeHE3Pk3MvZFuf9lEp3
+    name: Albert White
+  switchcase:
+    id: 0mE15zkHbyKOHBvPTVaU8f
+    name: switch/case
+  insane:
+    id: 28tTyxqw7DnaUy4CB3gEVB
+    name: in:sane
+  jakes:
+    id: 2tEg1Ert1kIHmm55ayDUy7
+    name: Jakes
+  l0g1n:
+    id: 46t037bUPpPsozvGOWx99U
+    name: L0G1N
+  maduk:
+    id: 6TaaqqCMRMSpvNHClfnbEL
+    name: Maduk
+  comma_dee:
+    id: 2K2k6w3rhyifPmKC4U86VY
+    name: Comma Dee
+  ill_truth:
+    id: 3cMDoNqsP4MKPN7sHhkX3P
+    name: Ill Truth
+  dkn:
+    id: 6a8qVsT1ptDusYgFrjD7U1
+    name: DKN
+  moody_good:
+    id: 3EN8pUGJtYWutzf2fUxrDH
+    name: Moody Good
+  maze:
+    id: 6lAnJw7YqGPgG1ShMCjcbQ
+    name: Maze
+  transt:
+    id: 56deVPjD57IXUDE3OJIhRF
+    name: TRANS:T
+  lexed:
+    id: 3QymvkNDkUqS4IuWyZ49eu
+    name: Lexed
+  ter3nce:
+    id: 6HCTmzB0CRSBt9YMIgpe57
+    name: TER3NCE
+  lian_feldd:
+    id: 3swRXJkn2A3kzY7ehZ9Y5L
+    name: Lian Feldd
+  bou:
+    id: 35dxfY1wywqVRUEaVuMm13
+    name: Bou
+  joe_hertz:
+    id: 76QHVIjgqlkWB9LNGliman
+    name: Joe Hertz
+  barney_artist:
+    id: 5iRM7qYip6UNfQaPe2reCz
+    name: Barney Artist
+  sam_wills:
+    id: 7JFinw4LobpCUjapyKvsjo
+    name: Sam Wills
+  blue_lab_beats:
+    id: 4YLUMAgNyttwx4hUHgtBtR
+    name: Blue Lab Beats
+  xeonz:
+    id: 5D2E6NSpRBf0ngCN9sJ2NC
+    name: Xeonz
+  ev:
+    id: 1qOueWotu6CIb1GMoib2GX
+    name: EV
+  luke_truth:
+    id: 0WbTHyRYTNOgr1V7vjbaSq
+    name: Luke Truth
+  travizwilde:
+    id: 2P9ZU1duxScdNTU61SFUsh
+    name: travizWILDE
+  karpa:
+    id: 4uMDArwv92q4FNMJp0Xbml
+    name: Karpa
+  meph:
+    id: 13d7d4QwHDjIbnbk1rYv5p
+    name: Meph
+  gexan:
+    id: 78oXTehvIIgJMTHH32cCoq
+    name: Gexan
+  ruth_royall:
+    id: 68mfV6tyHCTHZrNWNbVXmu
+    name: Ruth Royall
+  k_motionz:
+    id: 6QYdXToMo4XHnG1AnEVZYJ
+    name: K Motionz
+  songer:
+    id: 1iW3b73XWPQSknLyH5kDrd
+    name: Songer
+  purple_velvet_curtains:
+    id: 5UNXmWQKKqqBCxmcotxXmO
+    name: Purple Velvet Curtains
+  criteria:
+    id: 1T7oR1SnoeQYdndkj6QvsU
+    name: Criteria
+  broma:
+    id: 76XCzCaa2GtnyTFJHxKe43
+    name: Broma
+  curious_mind:
+    id: 0Mli6eFFMu7PSanMAj0gOz
+    name: Curious Mind
+  bala:
+    id: 0XnlFng7F8cVSoQR6irgZ0
+    name: BALA
+  gid_sedgwick:
+    id: 3Y43xMeiPftAookVOSKu1Y
+    name: Gid Sedgwick
+  concord_dawn:
+    id: 0T2UtAigVjFhAy6gu613z6
+    name: Concord Dawn
+labels:
+  artist_10_years_of_nerd: 10 Years of Nerd
+  artist_1610863_records_dk: 1610863 Records DK
+  artist_1985_music: 1985 Music
+  absie: ABSIE
+  albion_collective: Albion Collective
+  all_ways_dance: All Ways Dance
+  arlo_and_emi_grace: Arlo & Emi Grace
+  astralwerksblue_note_records: Astralwerks/Blue Note Records
+  automata_music: Automata Music
+  bad_medic_records: Bad Medic Records
+  basstripper_music: Basstripper Music
+  black_caviar: Black Caviar
+  blackout_music_nl: Blackout Music NL
+  boom_records_llc: Boom Records LLC
+  born_on_road: Born On Road
+  boxxy_music: Boxxy Music
+  cma_music: CMA Music
+  concord_dawn_limited: CONCORD DAWN LIMITED
+  capitol_records_uk: Capitol Records UK
+  catching_cairo: Catching Cairo
+  critical_music: Critical Music
+  crucast: Crucast
+  d19: D19
+  d4_d4nce: D4 D4NCE
+  dividid: DIVIDID
+  darkroominterscope_records: Darkroom/Interscope Records
+  delta9_recordings: Delta9 Recordings
+  dispatch_recordings: Dispatch Recordings
+  dnb_allstars: DnB Allstars
+  dnb_allstars_records: DnB Allstars Records
+  drumandbassarena: Drum&BassArena
+  eatbrain: Eatbrain
+  ego_project: Ego Project
+  ekho: Ekho
+  elevate_records: Elevate Records
+  ella_rosa: Ella Rosa
+  explorers_of_the_internet: Explorers of the Internet
+  fmly__island_records: FMLY / Island Records
+  foreign_mercy: FOREIGN MERCY
+  finding_hope_and_direct: Finding Hope & Direct
+  flexout_audio: Flexout Audio
+  fokuz_recordings: Fokuz Recordings
+  footnotes: Footnotes
+  funfair_records: Funfair Records
+  galacy_records: Galacy Records
+  gemini_gemini: Gemini Gemini
+  genosha_one_seven_five: Genosha One Seven Five
+  goldfat_records: Goldfat Records
+  grid_recordings_uk: Grid Recordings UK
+  hanami: HANAMI
+  hyst_records: HYST Records
+  helix_records: Helix Records
+  hospital_records: Hospital Records
+  in_the_lab_recordings: In The Lab Recordings
+  integral_records: Integral Records
+  interstellar_audio: Interstellar Audio
+  iterative: Iterative
+  judder_label: Judder Label
+  juicebox_recordings: Juicebox Recordings
+  keenan_mundane: Keenan Mundane
+  keep_it_lokal: Keep It Lokal
+  kia_ora: Kia Ora
+  liquicity_records: Liquicity Records
+  love_for_low_frequencies: Love For Low Frequencies
+  manifest: Manifest
+  matador: Matador
+  monstercat: Monstercat
+  nantoka_title_recs: Nantoka Title Recs
+  neksus_sound: Neksus Sound
+  nyx_recordings: Nyx Recordings
+  october_records: October Records
+  oppidan: Oppidan
+  overview_music: Overview Music
+  plg___capitol: PLG - Capitol
+  prspct_recordings: PRSPCT Recordings
+  pilot_: Pilot.
+  polydor_records: Polydor Records
+  positiva: Positiva
+  precinct: Precinct
+  ram_records: RAM Records
+  reial_audio: REIAL Audio
+  run: RUN
+  razzia: Razzia
+  ridmic: Ridmic
+  rolled_up_records: Rolled Up Records
+  rollout_records: Rollout Records
+  sinful_maze: SINFUL MAZE
+  siska: SISKA
+  sm_entertainment: SM Entertainment
+  selected_: Selected.
+  shogun_audio: Shogun Audio
+  shoshin: Shoshin
+  sidekick_music: Sidekick Music
+  sixis_audio: Sixis Audio
+  skybreak: Skybreak
+  sleep_tokenrca_records: Sleep Token/RCA Records
+  sleepless_music: Sleepless Music
+  smile_bomb: Smile Bomb
+  sofa_sound: Sofa Sound
+  soulvent_records: Soulvent Records
+  spearhead_records: Spearhead Records
+  stillness_music: Stillness Music
+  subtitles_music_records: Subtitles Music Records
+  symmetry_recordings: Symmetry Recordings
+  th3rd_brain: TH3RD BRAIN
+  tremmor_and_sano_music: TREMMOR & SANO MUSIC
+  technimatic_music: Technimatic Music
+  the_music_hub: The Music Hub
+  the_north_quarter: The North Quarter
+  tinted_records: Tinted Records
+  transparent_audio: Transparent Audio
+  trust_audio: Trust Audio
+  truth_hertz: Truth Hertz
+  ukf: UKF
+  upscale_hq: Upscale HQ
+  v_recordings: V Recordings
+  vandal_records: Vandal Records
+  viper_recordings: Viper Recordings
+  vrdnyn_music: Vrdnyn Music
+  wang_records: Wang Records
+  waterframes_music: Waterframes Music
+  weapons: Weapons
+  yamatai_records: Yamatai Records
+  yosh_bass: Yosh Bass
+  broke: broke
+  kmbsounds: kmbsounds
+  mau5trap: mau5trap

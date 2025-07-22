@@ -188,3 +188,5 @@ track_id_db.yaml
 track_id_db_overrides.yaml
 sync_report_*.yaml
 custom_tracks.yaml
+crawl_config.yaml
+crawl_report_*.yaml
