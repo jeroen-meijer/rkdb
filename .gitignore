@@ -190,3 +190,5 @@ sync_report_*.yaml
 custom_tracks.yaml
 crawl_config.yaml
 crawl_report_*.yaml
+crawl_cache.yaml
+build/

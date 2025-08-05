@@ -2,8 +2,123 @@ import datetime
 import yaml
 import spotipy
 from typing import List, Dict, Any, Set, Optional
-from services import setup_spotify
+from services import get_user_or_sign_in, setup_spotify
 from functions import exhaust_fetch
+from cache import CrawlCache
+from image_generator import process_playlist_cover
+from fuzzywuzzy import fuzz
+
+
+def extract_essential_album_data(album_data: Dict[str, Any]) -> Dict[str, Any]:
+  """
+  Extract only the essential album data fields needed for caching.
+  This significantly reduces cache size by removing unnecessary metadata.
+  """
+  if not album_data:
+    return {}
+
+  return {
+    'id': album_data.get('id'),
+    'name': album_data.get('name'),
+    'release_date': album_data.get('release_date'),
+    'label': album_data.get('label'),
+    'artists': [
+      {
+        'id': artist.get('id'),
+        'name': artist.get('name')
+      }
+      for artist in album_data.get('artists', [])
+    ] if album_data.get('artists') else []
+  }
+
+
+def chunks(lst, n):
+  """Split a list into chunks of size n."""
+  for i in range(0, len(lst), n):
+    yield lst[i:i + n]
+
+
+def batch_fetch_albums(sp: spotipy.Spotify, album_ids: List[str], cache: CrawlCache) -> Dict[str, Dict[str, Any]]:
+  """
+  Fetch multiple albums in batches and cache them.
+  Returns a dict mapping album_id to album_data for albums that were successfully fetched.
+  """
+  if not album_ids:
+    return {}
+
+  # Filter out albums that are already cached
+  missing_album_ids = cache.get_missing_album_ids(album_ids)
+
+  if not missing_album_ids:
+    print(f"       💾 All {len(album_ids)} albums already cached")
+    return {}
+
+  print(f"       🔄 Fetching {len(missing_album_ids)} albums in batches...")
+
+  fetched_albums = {}
+
+  # Fetch albums in batches of 20 (Spotify API limit)
+  for batch in chunks(missing_album_ids, 20):
+    try:
+      # NOTE(jeroen-meijer): Rate limiting
+      cache.rate_limit_wait()
+
+      batch_albums = sp.albums(batch)
+
+      if batch_albums and 'albums' in batch_albums:
+        for album in batch_albums['albums']:
+          if album:  # Check if album exists (not None)
+            album_id = album['id']
+            # Extract only essential data to minimize cache size
+            essential_data = extract_essential_album_data(album)
+            fetched_albums[album_id] = essential_data
+            print(
+              f"         ✅ Fetched album: {album.get('name', 'Unknown')} ({album_id})")
+          else:
+            print(f"         ⚠️  Album not found in batch")
+
+      print(f"         📦 Processed batch of {len(batch)} albums")
+
+    except Exception as e:
+      print(f"         ❌ Error fetching album batch: {e}")
+      continue
+
+  # Cache all fetched albums
+  if fetched_albums:
+    cache.batch_set_albums(fetched_albums)
+    print(f"       💾 Cached {len(fetched_albums)} new albums")
+
+  return fetched_albums
+
+
+def get_album_data_for_track(track: Dict[str, Any], cache: CrawlCache) -> Optional[Dict[str, Any]]:
+  """
+  Get album data for a track, either from cache or by fetching.
+  Returns album data if available, None otherwise.
+  """
+  if not track or not track.get('id'):
+    return None
+
+  track_id = track['id']
+
+  # First check if we have a track-to-album mapping
+  album_id = cache.get_track_album_id(track_id)
+
+  # If no mapping, try to get album ID from track data
+  if not album_id and track.get('album') and track['album'].get('id'):
+    album_id = track['album']['id']
+    # Cache the mapping for future use
+    cache.set_track_album_mapping(track_id, album_id)
+
+  if not album_id:
+    return None
+
+  # Check if album is cached
+  cached_album = cache.get_album(album_id)
+  if cached_album:
+    return cached_album['data']
+
+  return None
 
 
 def parse_release_date(release_date_str: str) -> datetime.datetime:
@@ -62,14 +177,17 @@ def validate_job_config(job: Dict[str, Any]) -> bool:
     return False
 
   # Check for required inputs (at least one source)
+  # NOTE(jeroen-meijer): Allow empty input arrays - they will be handled gracefully
+  # by the processing code. This allows for commented out items in YAML configs.
   inputs = job.get('inputs', {})
-  has_playlists = bool(inputs.get('playlists', []))
-  has_artists = bool(inputs.get('artists', []))
-  has_labels = bool(inputs.get('labels', []))
+  has_playlists = bool(inputs.get('playlists') or [])
+  has_artists = bool(inputs.get('artists') or [])
+  has_labels = bool(inputs.get('labels') or [])
 
   if not (has_playlists or has_artists or has_labels):
     print(
-      f"❌ Error: Job '{job_name}' must have at least one input source (playlists, artists, or labels)")
+      f"❌ Error: Job '{job_name}' has no input sources (playlists, artists, or labels)")
+    print(f"   This would create an empty playlist with no purpose. Please add at least one input source.")
     return False
 
   # Check for required output_playlist
@@ -86,6 +204,10 @@ def create_crawl_report(job: Dict[str, Any], all_tracks: List[Dict[str, Any]], c
   """
   Create a crawl report with details about what tracks were added and their sources.
   """
+  # Ensure all_tracks is a list, not None
+  if all_tracks is None:
+    all_tracks = []
+
   report = {
     'crawl_info': {
       'job_name': job.get('name', 'Unnamed Job'),
@@ -160,13 +282,19 @@ def save_combined_crawl_report(all_reports: List[Dict[str, Any]]):
     print(f"⚠️  Warning: Could not save combined crawl report: {e}")
 
 
-def crawl_spotify_playlists():
+def crawl_spotify_playlists(cache: CrawlCache = None):
   """
   Crawl Spotify playlists, artists, and labels based on YAML configuration.
   Creates new playlists with tracks added within the specified time window.
   """
   print("🎵 Spotify Playlist Crawler")
   print("=" * 50)
+
+  # Initialize cache if not provided
+  if cache is None:
+    cache = CrawlCache()
+  cache.print_cache_stats()
+  print()
 
   # Load configuration
   try:
@@ -184,7 +312,7 @@ def crawl_spotify_playlists():
 
   # Get current user
   try:
-    user = sp.current_user()
+    user = get_user_or_sign_in(sp)
     if user is None:
       print("❌ Error: Could not get user info")
       return
@@ -206,18 +334,27 @@ def crawl_spotify_playlists():
   all_reports = []
 
   for job in jobs:
-    report = process_job(sp, job, config)
-    if report:
-      all_reports.append(report)
+    try:
+      report = process_job(sp, job, config, cache)
+      if report:
+        all_reports.append(report)
+    except Exception as e:
+      print(f"⚠️  Warning: Job '{job.get('name', 'Unnamed')}' failed: {e}")
+      print("   Continuing with next job...")
+      continue
 
-  # Save combined report if any jobs were processed
-  if all_reports:
-    save_combined_crawl_report(all_reports)
-  else:
-    print("📊 No jobs were processed successfully, no report generated")
+  # Save combined report if any jobs were processed (non-critical)
+  try:
+    if all_reports:
+      save_combined_crawl_report(all_reports)
+    else:
+      print("📊 No jobs were processed successfully, no report generated")
+  except Exception as e:
+    print(f"⚠️  Warning: Could not save combined report: {e}")
+    print("   Playlists were still created successfully.")
 
 
-def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]):
+def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache):
   """Process a single job from the configuration."""
   job_name = job.get('name', 'Unnamed Job')
   print(f"🔄 Processing job: {job_name}")
@@ -245,52 +382,79 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
   all_tracks = []
 
   # Process playlists
-  playlist_ids = resolve_references(inputs.get('playlists', []), config)
+  playlist_ids = resolve_references(inputs.get('playlists') or [], config)
   if playlist_ids:
     print(f"📜 Processing {len(playlist_ids)} playlist(s)...")
-    playlist_tracks = get_playlist_tracks(sp, playlist_ids, cutoff_date)
-    all_tracks.extend(playlist_tracks)
-    print(f"   Found {len(playlist_tracks)} tracks from playlists")
+    try:
+      playlist_tracks = get_playlist_tracks(
+        sp, playlist_ids, cutoff_date, cache)
+      all_tracks.extend(playlist_tracks)
+      print(f"   Found {len(playlist_tracks)} tracks from playlists")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing playlists: {e}")
+      print("   Continuing with other sources...")
 
-  # Process artists
-  artist_ids = resolve_references(inputs.get('artists', []), config)
+  # Process artists (no caching since artists can release new music)
+  artist_ids = resolve_references(inputs.get('artists') or [], config)
   if artist_ids:
     print(f"🎤 Processing {len(artist_ids)} artist(s)...")
-    artist_tracks = get_artist_tracks(sp, artist_ids, cutoff_date)
-    all_tracks.extend(artist_tracks)
-    print(f"   Found {len(artist_tracks)} tracks from artists")
+    try:
+      artist_tracks = get_artist_tracks(sp, artist_ids, cutoff_date, cache)
+      all_tracks.extend(artist_tracks)
+      print(f"   Found {len(artist_tracks)} tracks from artists")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing artists: {e}")
+      print("   Continuing with other sources...")
 
   # Process labels
-  label_ids = resolve_references(inputs.get('labels', []), config)
+  label_ids = resolve_references(inputs.get('labels') or [], config)
   if label_ids:
     print(f"🏷️  Processing {len(label_ids)} label(s)...")
-    label_tracks = get_label_tracks(sp, label_ids, cutoff_date)
-    all_tracks.extend(label_tracks)
-    print(f"   Found {len(label_tracks)} tracks from labels")
+    try:
+      label_tracks = get_label_tracks(sp, label_ids, cutoff_date, cache)
+      all_tracks.extend(label_tracks)
+      print(f"   Found {len(label_tracks)} tracks from labels")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing labels: {e}")
+      print("   Continuing with other sources...")
 
   if not all_tracks:
-    print("❌ No tracks found for this job")
-    print()
-    return None
+    print("⚠️  No tracks found for this job - will create empty playlist")
+    # Continue to create the playlist even if empty
 
   # Deduplicate tracks if requested
   if options.get('deduplicate', True):
-    unique_tracks = deduplicate_tracks(all_tracks)
-    print(f"🔄 Deduplicated: {len(all_tracks)} → {len(unique_tracks)} tracks")
-    all_tracks = unique_tracks
+    try:
+      unique_tracks = deduplicate_tracks(all_tracks)
+      print(f"🔄 Deduplicated: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      all_tracks = unique_tracks
+    except Exception as e:
+      print(f"⚠️  Warning: Error during deduplication: {e}")
+      print("   Continuing with original track list...")
 
   # Create playlist
-  playlist_name = generate_playlist_name(
-    output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks)
-  playlist_description = generate_playlist_name(
-    output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks)
-  is_public = output_playlist.get('public', False)
+  try:
+    # Ensure all_tracks is a list, not None
+    if all_tracks is None:
+      all_tracks = []
 
-  print(f"📝 Creating playlist: {playlist_name}")
+    playlist_name = generate_playlist_name(
+      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks)
+    playlist_description = generate_playlist_name(
+      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks)
+    is_public = output_playlist.get('public', False)
+
+    print(f"📝 Creating playlist: {playlist_name}")
+  except Exception as e:
+    print(f"⚠️  Warning: Error generating playlist name: {e}")
+    print("   Using fallback playlist name...")
+    playlist_name = f"Generated Playlist {datetime.datetime.now().strftime('%Y-%m-%d')}"
+    playlist_description = "Generated by Spotify Crawler"
+    is_public = output_playlist.get('public', False)
 
   try:
     # Get current user for playlist creation
-    current_user = sp.current_user()
+    current_user = get_user_or_sign_in(sp)
     if current_user is None:
       print("❌ Error: Could not get current user for playlist creation")
       return
@@ -309,22 +473,46 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
 
     # Add tracks to playlist
     if all_tracks:
-      track_uris = [track['uri'] for track in all_tracks]
+      try:
+        track_uris = [track['uri'] for track in all_tracks]
 
-      # Add tracks in batches of 100 (Spotify API limit)
-      for i in range(0, len(track_uris), 100):
-        batch = track_uris[i:i + 100]
-        sp.playlist_add_items(playlist['id'], batch)
+        # Add tracks in batches of 100 (Spotify API limit)
+        for i in range(0, len(track_uris), 100):
+          batch = track_uris[i:i + 100]
+          sp.playlist_add_items(playlist['id'], batch)
 
-      print(f"✅ Added {len(all_tracks)} tracks to playlist")
-      if playlist.get('external_urls') and playlist['external_urls'].get('spotify'):
-        print(f"🔗 Playlist URL: {playlist['external_urls']['spotify']}")
+        print(f"✅ Added {len(all_tracks)} tracks to playlist")
+      except Exception as e:
+        print(f"⚠️  Warning: Error adding tracks to playlist: {e}")
+        print("   Playlist was created but tracks could not be added.")
     else:
       print("⚠️  No tracks to add to playlist")
 
-    # Create crawl report
-    report = create_crawl_report(job, all_tracks, cutoff_date)
-    return report
+    # Show playlist URL if available
+    try:
+      if playlist.get('external_urls') and playlist['external_urls'].get('spotify'):
+        print(f"🔗 Playlist URL: {playlist['external_urls']['spotify']}")
+    except Exception as e:
+      print(f"⚠️  Warning: Could not display playlist URL: {e}")
+
+    # Process playlist cover (non-critical - continue if it fails)
+    try:
+      if process_playlist_cover(sp, job, playlist['id'], playlist_name):
+        print(f"✅ Playlist cover processed successfully")
+      else:
+        print(f"⚠️  Warning: Could not process playlist cover")
+    except Exception as e:
+      print(f"⚠️  Warning: Error processing playlist cover: {e}")
+      print("   Continuing with playlist creation...")
+
+    # Create crawl report (non-critical - continue if it fails)
+    try:
+      report = create_crawl_report(job, all_tracks, cutoff_date)
+      return report
+    except Exception as e:
+      print(f"⚠️  Warning: Could not create crawl report: {e}")
+      print("   Continuing with playlist creation...")
+      return None
 
   except Exception as e:
     print(f"❌ Error creating playlist: {e}")
@@ -360,35 +548,109 @@ def resolve_references(items: List[str], config: Dict[str, Any]) -> List[str]:
   return resolved
 
 
-def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
   """Get tracks from playlists that were added after the cutoff date."""
   all_tracks = []
 
   for playlist_id in playlist_ids:
     try:
-      # Get playlist info to show the name
+      # Check cache first
+      cached_playlist = cache.get_playlist(playlist_id)
+
+      # Get playlist info and snapshot ID to check if it has changed
       try:
-        playlist_info = sp.playlist(playlist_id, fields='name')
+        playlist_info = sp.playlist(playlist_id, fields='name,snapshot_id')
         if playlist_info is None:
           playlist_name = 'Unknown Playlist'
+          current_snapshot_id = None
         else:
           playlist_name = playlist_info.get('name', 'Unknown Playlist')
+          current_snapshot_id = playlist_info.get('snapshot_id')
+
         print(f"     📜 Processing playlist: {playlist_name} ({playlist_id})")
+
+        # Check if playlist has changed - if not, use cached data completely
+        if cached_playlist and current_snapshot_id and not cache.is_playlist_changed(playlist_id, current_snapshot_id):
+          print(
+            f"       💾 Using cached playlist data (snapshot: {current_snapshot_id})")
+          cached_tracks = cached_playlist.get('data', {}).get('tracks', [])
+          # Filter tracks added after cutoff date from cached data
+          recent_tracks = []
+          for item in cached_tracks:
+            if not item or not item.get('track'):
+              continue
+
+            added_at = datetime.datetime.fromisoformat(
+                item['added_at'].replace('Z', '+00:00'))
+            # Make cutoff_date timezone-aware for comparison
+            cutoff_date_aware = cutoff_date.replace(
+              tzinfo=datetime.timezone.utc)
+
+            if added_at > cutoff_date_aware:
+              track = item['track']
+              if track and track.get('id'):
+                # NOTE(jeroen-meijer): Reconstruct full track data from album ID reference
+                if track.get('album_id'):
+                  cached_album = cache.get_album(track['album_id'])
+                  if cached_album:
+                    track['album'] = cached_album['data']
+                  else:
+                    # Fallback if album not found in cache
+                    track['album'] = {'release_date': None}
+                else:
+                  track['album'] = {'release_date': None}
+
+                track['source'] = f'playlist:{playlist_id}'
+                recent_tracks.append(track)
+
+          print(
+            f"       ✅ Found {len(recent_tracks)} recent tracks from cache (from {len(cached_tracks)} total tracks)")
+          all_tracks.extend(recent_tracks)
+          continue
+
       except Exception as e:
         print(
-          f"     📜 Processing playlist: {playlist_id} (could not fetch name: {e})")
+          f"     📜 Processing playlist: {playlist_id} (could not fetch info: {e})")
         playlist_name = f"Playlist {playlist_id}"
+        current_snapshot_id = None
 
-      # Get playlist tracks with added_at field
+      # If we reach here, we need to fetch tracks from Spotify
+      print(f"       🔄 Fetching tracks from Spotify...")
+
+      # Get playlist tracks with added_at field and album information
       tracks = exhaust_fetch(
           fetch=lambda offset, limit: sp.playlist_items(
               playlist_id,
               offset=offset,
               limit=limit,
-              fields='items(added_at,track(id,uri,name,artists(name),album(release_date))),next'
+              fields='items(added_at,track(id,uri,name,artists(name),album(id,name,release_date,label))),next'
           ),
           map_elements=lambda res: res['items']
       )
+
+      # Collect all album IDs for batch fetching
+      album_ids_to_fetch = set()
+      track_album_mappings = {}  # Track which track belongs to which album
+
+      for item in tracks:
+        if not item or not item.get('track'):
+          continue
+
+        track = item['track']
+        if track and track.get('id') and track.get('album') and track['album'].get('id'):
+          album_id = track['album']['id']
+          track_id = track['id']
+
+          # Store track-to-album mapping
+          track_album_mappings[track_id] = album_id
+
+          # Add to batch fetch list if not cached
+          if not cache.get_album(album_id):
+            album_ids_to_fetch.add(album_id)
+
+      # Batch fetch all missing albums
+      if album_ids_to_fetch:
+        batch_fetch_albums(sp, list(album_ids_to_fetch), cache)
 
       # Filter tracks added after cutoff date
       recent_tracks = []
@@ -404,11 +666,51 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
         if added_at > cutoff_date_aware:
           track = item['track']
           if track and track.get('id'):
+            # Cache track-to-album mapping
+            if track['id'] in track_album_mappings:
+              cache.set_track_album_mapping(
+                track['id'], track_album_mappings[track['id']])
+
             track['source'] = f'playlist:{playlist_id}'
             recent_tracks.append(track)
 
+      # NOTE(jeroen-meijer): Convert tracks to use album ID references instead of full album data
+      processed_tracks = []
+      for item in tracks:
+        if not item or not item.get('track'):
+          continue
+
+        track = item['track']
+        if track and track.get('id'):
+          # Create a copy of the track with album ID reference instead of full album data
+          processed_track = {
+            'id': track['id'],
+            'uri': track['uri'],
+            'name': track['name'],
+            'artists': track.get('artists', []),
+            'album_id': track['album']['id'] if track.get('album') and track['album'].get('id') else None,
+            'source': f'playlist:{playlist_id}'
+          }
+          processed_tracks.append({
+            'track': processed_track,
+            'added_at': item['added_at']
+          })
+
       print(
         f"       ✅ Found {len(recent_tracks)} recent tracks (from {len(tracks)} total tracks)")
+      if album_ids_to_fetch:
+        print(f"       💾 Cached {len(album_ids_to_fetch)} new albums")
+
+      # Cache the playlist data if we have a snapshot ID
+      if current_snapshot_id:
+        playlist_data = {
+          'name': playlist_name,
+          'tracks': processed_tracks
+        }
+        cache.set_playlist(playlist_id, playlist_data, current_snapshot_id)
+        print(
+          f"       💾 Cached playlist data (snapshot: {current_snapshot_id})")
+
       all_tracks.extend(recent_tracks)
 
     except Exception as e:
@@ -417,13 +719,13 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
   return all_tracks
 
 
-def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
   """Get tracks from artists that were released after the cutoff date."""
   all_tracks = []
 
   for artist_id in artist_ids:
     try:
-      # Get artist info to show the name
+      # Get artist info to show the name (no caching since artists can release new music)
       try:
         artist_info = sp.artist(artist_id)
         if artist_info is None:
@@ -447,7 +749,7 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
         print(f"       ⚠️  No albums found for artist {artist_name}")
         continue
 
-      # Filter albums released after cutoff date
+      # Pre-filter albums by release date before fetching tracks
       recent_albums = []
       for album in albums['items']:
         if album and album.get('release_date'):
@@ -462,11 +764,24 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
 
       print(f"       📀 Found {len(recent_albums)} recent albums")
 
+      # Collect album IDs for batch caching
+      album_ids_to_cache = []
+      for album in recent_albums:
+        if album.get('id') and not cache.get_album(album['id']):
+          album_ids_to_cache.append(album['id'])
+
+      # Cache albums in batches if needed
+      if album_ids_to_cache:
+        print(f"       💾 Caching {len(album_ids_to_cache)} new albums...")
+        batch_fetch_albums(sp, album_ids_to_cache, cache)
+
       # Get tracks from recent albums
       for album in recent_albums:
         try:
           print(
             f"         🎵 Processing album: {album.get('name', 'Unknown')} ({album.get('release_date', 'Unknown date')})")
+
+          # Get album tracks
           album_tracks = sp.album_tracks(album['id'])
 
           if album_tracks and 'items' in album_tracks:
@@ -474,6 +789,11 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
               if track:
                 try:
                   release_date = parse_release_date(album['release_date'])
+
+                  # Cache track-to-album mapping
+                  if track.get('id') and album.get('id'):
+                    cache.set_track_album_mapping(track['id'], album['id'])
+
                   all_tracks.append({
                       'id': track['id'],
                       'uri': track['uri'],
@@ -502,7 +822,7 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
   return all_tracks
 
 
-def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
   """Get tracks from labels that were released after the cutoff date."""
   all_tracks = []
 
@@ -522,29 +842,71 @@ def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: dat
       )
 
       if search_results and 'tracks' in search_results and 'items' in search_results['tracks']:
-        # Filter tracks released after cutoff date
+        # Collect album IDs for batch fetching
+        album_ids_to_fetch = set()
+        track_album_mappings = {}  # Track which track belongs to which album
         recent_tracks = []
+        mismatched_labels = set()  # Track labels that don't match for reporting
+
         for track in search_results['tracks']['items']:
           if track and track.get('album') and track['album'].get('release_date'):
             try:
               release_date = parse_release_date(track['album']['release_date'])
               if release_date > cutoff_date:
-                recent_tracks.append({
-                    'id': track['id'],
-                    'uri': track['uri'],
-                    'name': track['name'],
-                    'artists': [artist['name'] for artist in track['artists']] if track.get('artists') else [],
-                    'album_release_date': track['album']['release_date'],
-                    'added_at': release_date,
-                    'source': f'label:{label_id}'
-                })
+                # NOTE(jeroen-meijer): Validate that the track's actual label matches our search term
+                # This prevents false matches like "ARIES" appearing when searching for "Aquario"
+                track_label = track['album'].get('label', '')
+                label_match_ratio = fuzz.ratio(
+                  label_name.lower(), track_label.lower())
+
+                # Use a high confidence threshold (90%) to ensure accurate matches
+                if label_match_ratio >= 90:
+                  # Collect album ID for batch fetching
+                  if track.get('album') and track['album'].get('id'):
+                    album_id = track['album']['id']
+                    track_id = track['id']
+
+                    # Store track-to-album mapping
+                    track_album_mappings[track_id] = album_id
+
+                    # Add to batch fetch list if not cached
+                    if not cache.get_album(album_id):
+                      album_ids_to_fetch.add(album_id)
+
+                  recent_tracks.append({
+                      'id': track['id'],
+                      'uri': track['uri'],
+                      'name': track['name'],
+                      'artists': [artist['name'] for artist in track['artists']] if track.get('artists') else [],
+                      'album_release_date': track['album']['release_date'],
+                      'added_at': release_date,
+                      'source': f'label:{label_id}'
+                  })
+                else:
+                  # Track mismatched labels for reporting
+                  if track_label and track_label not in mismatched_labels:
+                    mismatched_labels.add(track_label)
+                    print(
+                      f"         ⚠️  Skipping track '{track.get('name', 'Unknown')}' - label mismatch: '{track_label}' (match: {label_match_ratio}%)")
+
             except ValueError as e:
               print(
                 f"         ⚠️  Warning: Could not parse release date '{track['album']['release_date']}' for track '{track.get('name', 'Unknown')}': {e}")
               continue
 
+        # Batch fetch all missing albums
+        if album_ids_to_fetch:
+          batch_fetch_albums(sp, list(album_ids_to_fetch), cache)
+
+        # Cache track-to-album mappings
+        for track_id, album_id in track_album_mappings.items():
+          cache.set_track_album_mapping(track_id, album_id)
+
         print(
           f"       ✅ Found {len(recent_tracks)} recent tracks from label {label_name}")
+        if mismatched_labels:
+          print(
+            f"       ⚠️  Skipped tracks from mismatched labels: {', '.join(sorted(mismatched_labels))}")
         all_tracks.extend(recent_tracks)
       else:
         print(f"       ⚠️  No search results found for label {label_name}")
@@ -570,6 +932,10 @@ def deduplicate_tracks(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, cutoff_date: Optional[datetime.datetime] = None, track_count: int = 0, all_tracks: Optional[List[Dict[str, Any]]] = None) -> str:
   """Generate playlist name with template variables."""
+  # Ensure all_tracks is a list, not None
+  if all_tracks is None:
+    all_tracks = []
+
   now = datetime.datetime.now()
 
   # Calculate date range if cutoff_date is provided
@@ -593,9 +959,13 @@ def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, 
 
   if job and 'inputs' in job:
     inputs = job['inputs']
-    playlist_count = len(inputs.get('playlists', []))
-    artist_count = len(inputs.get('artists', []))
-    label_count = len(inputs.get('labels', []))
+    # Ensure we get lists, not None
+    playlists = inputs.get('playlists', []) or []
+    artists = inputs.get('artists', []) or []
+    labels = inputs.get('labels', []) or []
+    playlist_count = len(playlists)
+    artist_count = len(artists)
+    label_count = len(labels)
 
     # Build source lists (simplified - would need actual names from processing)
     if playlist_count > 0:

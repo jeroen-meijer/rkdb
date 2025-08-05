@@ -9,7 +9,7 @@ import pyrekordbox as r
 from typing import List
 from db import get_custom_tracks_db, get_missing_tracks_db, get_track_id_db, get_track_id_overrides_db, save_sync_report, set_missing_tracks_db, set_track_id_db
 from functions import attempt_get_key, ensure_custom_track_schema, ensure_track_db_schema, exhaust_fetch, find_best_match, find_track, first_or_none, generate_itunes_store_url
-from services import setup_rekordbox, setup_spotify
+from services import get_user_or_sign_in, setup_rekordbox, setup_spotify
 from requests import JSONDecodeError
 from collections import namedtuple
 import traceback
@@ -65,7 +65,7 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
                      list(map(lambda k: k.ScaleName, rb_camelot_keys.values()))}")
 
   print("Logging into Spotify...")
-  sp_user = sp.current_user()
+  sp_user = get_user_or_sign_in(sp)
   if sp_user is None:
     raise ValueError("Failed to get Spotify user information")
   print(f"Logged in as {sp_user['display_name']} ('{sp_user['id']}')")

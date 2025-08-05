@@ -1,3 +1,4 @@
+import os
 import secret_keys
 import constants
 import spotipy as s
@@ -14,6 +15,25 @@ def setup_spotify():
       scope=constants.SPOTIFY_SCOPES,
     )
   )
+
+
+def get_user_or_sign_in(sp: s.Spotify):
+  try:
+    user = sp.current_user()
+    if user is None:
+      raise Exception("Could not get user info")
+    return user
+  except Exception as e:
+    # Remove .cache file from root of project
+    script_path = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_path)
+    cache_file = os.path.join(project_root, '.cache')
+    if os.path.exists(cache_file):
+      os.remove(cache_file)
+
+    print("🔄 Signing in...")
+    user = sp.current_user()
+    return user
 
 
 def setup_rekordbox(allow_while_running: bool = False):
