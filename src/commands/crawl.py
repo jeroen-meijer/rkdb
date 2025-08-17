@@ -9,6 +9,80 @@ from image_generator import process_playlist_cover
 from fuzzywuzzy import fuzz
 
 
+class AlbumFetchManager:
+  """
+  Centralized manager for collecting and fetching albums across all sources.
+  This optimizes API calls by batching all album fetches together.
+  """
+
+  def __init__(self, sp: spotipy.Spotify, cache: CrawlCache):
+    self.sp = sp
+    self.cache = cache
+    self.album_ids_to_fetch: Set[str] = set()
+    self.track_album_mappings: Dict[str, str] = {}  # track_id -> album_id
+    # album_id -> list of sources requesting it
+    self.source_info: Dict[str, List[str]] = {}
+
+  def add_album_request(self, album_id: str, track_id: str, source: str):
+    """Add an album to the fetch queue with source tracking."""
+    if not album_id or not track_id:
+      return
+
+    # Only add if not already cached
+    if not self.cache.get_album(album_id):
+      self.album_ids_to_fetch.add(album_id)
+      self.track_album_mappings[track_id] = album_id
+
+      # Track which sources requested this album
+      if album_id not in self.source_info:
+        self.source_info[album_id] = []
+      if source not in self.source_info[album_id]:
+        self.source_info[album_id].append(source)
+
+  def add_album_requests_batch(self, album_requests: List[Dict[str, str]]):
+    """Add multiple album requests at once."""
+    for request in album_requests:
+      self.add_album_request(
+        request.get('album_id'),
+        request.get('track_id'),
+        request.get('source')
+      )
+
+  def fetch_all_albums(self) -> Dict[str, Dict[str, Any]]:
+    """Fetch all collected albums in optimized batches."""
+    if not self.album_ids_to_fetch:
+      print("       💾 All albums already cached")
+      return {}
+
+    print(
+      f"       🔄 Fetching {len(self.album_ids_to_fetch)} albums in optimized batches...")
+
+    # Convert to list and fetch
+    album_ids_list = list(self.album_ids_to_fetch)
+    fetched_albums = batch_fetch_albums(self.sp, album_ids_list, self.cache)
+
+    # Cache track-to-album mappings
+    for track_id, album_id in self.track_album_mappings.items():
+      self.cache.set_track_album_mapping(track_id, album_id)
+
+    # Print source statistics
+    if self.source_info:
+      source_counts = {}
+      for sources in self.source_info.values():
+        for source in sources:
+          source_counts[source] = source_counts.get(source, 0) + 1
+
+      print(f"       📊 Album requests by source:")
+      for source, count in sorted(source_counts.items()):
+        print(f"         {source}: {count} albums")
+
+    return fetched_albums
+
+  def get_track_album_mappings(self) -> Dict[str, str]:
+    """Get all track-to-album mappings collected during this session."""
+    return self.track_album_mappings.copy()
+
+
 def extract_essential_album_data(album_data: Dict[str, Any]) -> Dict[str, Any]:
   """
   Extract only the essential album data fields needed for caching.
@@ -282,10 +356,14 @@ def save_combined_crawl_report(all_reports: List[Dict[str, Any]]):
     print(f"⚠️  Warning: Could not save combined crawl report: {e}")
 
 
-def crawl_spotify_playlists(cache: CrawlCache = None):
+def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.datetime = None):
   """
   Crawl Spotify playlists, artists, and labels based on YAML configuration.
   Creates new playlists with tracks added within the specified time window.
+
+  Args:
+    cache: Optional CrawlCache instance
+    custom_date: Optional custom date to use instead of current date (for testing/debugging)
   """
   print("🎵 Spotify Playlist Crawler")
   print("=" * 50)
@@ -335,7 +413,7 @@ def crawl_spotify_playlists(cache: CrawlCache = None):
 
   for job in jobs:
     try:
-      report = process_job(sp, job, config, cache)
+      report = process_job(sp, job, config, cache, custom_date)
       if report:
         all_reports.append(report)
     except Exception as e:
@@ -354,7 +432,7 @@ def crawl_spotify_playlists(cache: CrawlCache = None):
     print("   Playlists were still created successfully.")
 
 
-def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache):
+def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache, custom_date: datetime.datetime = None):
   """Process a single job from the configuration."""
   job_name = job.get('name', 'Unnamed Job')
   print(f"🔄 Processing job: {job_name}")
@@ -373,10 +451,19 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
 
   # Calculate time window
   days_back = filters.get('added_between_days', 7)
-  current_time = datetime.datetime.now()
+  current_time = custom_date if custom_date else datetime.datetime.now()
   cutoff_date = current_time - datetime.timedelta(days=days_back)
-  print(
-    f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+
+  if custom_date:
+    print(f"📅 Using custom date: {custom_date.strftime('%Y-%m-%d')}")
+    print(
+      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+  else:
+    print(
+      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+
+  # Create centralized album fetch manager
+  album_manager = AlbumFetchManager(sp, cache)
 
   # Collect all tracks
   all_tracks = []
@@ -387,7 +474,7 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
     print(f"📜 Processing {len(playlist_ids)} playlist(s)...")
     try:
       playlist_tracks = get_playlist_tracks(
-        sp, playlist_ids, cutoff_date, cache)
+        sp, playlist_ids, cutoff_date, cache, album_manager)
       all_tracks.extend(playlist_tracks)
       print(f"   Found {len(playlist_tracks)} tracks from playlists")
     except Exception as e:
@@ -399,7 +486,8 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
   if artist_ids:
     print(f"🎤 Processing {len(artist_ids)} artist(s)...")
     try:
-      artist_tracks = get_artist_tracks(sp, artist_ids, cutoff_date, cache)
+      artist_tracks = get_artist_tracks(
+        sp, artist_ids, cutoff_date, cache, album_manager)
       all_tracks.extend(artist_tracks)
       print(f"   Found {len(artist_tracks)} tracks from artists")
     except Exception as e:
@@ -411,12 +499,17 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
   if label_ids:
     print(f"🏷️  Processing {len(label_ids)} label(s)...")
     try:
-      label_tracks = get_label_tracks(sp, label_ids, cutoff_date, cache)
+      label_tracks = get_label_tracks(
+        sp, label_ids, cutoff_date, cache, album_manager)
       all_tracks.extend(label_tracks)
       print(f"   Found {len(label_tracks)} tracks from labels")
     except Exception as e:
       print(f"   ⚠️  Warning: Error processing labels: {e}")
       print("   Continuing with other sources...")
+
+  # Fetch all albums in optimized batches
+  print("🔄 Fetching all albums in optimized batches...")
+  album_manager.fetch_all_albums()
 
   if not all_tracks:
     print("⚠️  No tracks found for this job - will create empty playlist")
@@ -439,9 +532,9 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
       all_tracks = []
 
     playlist_name = generate_playlist_name(
-      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks)
+      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
     playlist_description = generate_playlist_name(
-      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks)
+      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
     is_public = output_playlist.get('public', False)
 
     print(f"📝 Creating playlist: {playlist_name}")
@@ -548,7 +641,7 @@ def resolve_references(items: List[str], config: Dict[str, Any]) -> List[str]:
   return resolved
 
 
-def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
+def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache, album_manager: AlbumFetchManager) -> List[Dict[str, Any]]:
   """Get tracks from playlists that were added after the cutoff date."""
   all_tracks = []
 
@@ -628,10 +721,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
           map_elements=lambda res: res['items']
       )
 
-      # Collect all album IDs for batch fetching
-      album_ids_to_fetch = set()
-      track_album_mappings = {}  # Track which track belongs to which album
-
+      # Collect album requests for centralized fetching
       for item in tracks:
         if not item or not item.get('track'):
           continue
@@ -641,16 +731,9 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
           album_id = track['album']['id']
           track_id = track['id']
 
-          # Store track-to-album mapping
-          track_album_mappings[track_id] = album_id
-
-          # Add to batch fetch list if not cached
-          if not cache.get_album(album_id):
-            album_ids_to_fetch.add(album_id)
-
-      # Batch fetch all missing albums
-      if album_ids_to_fetch:
-        batch_fetch_albums(sp, list(album_ids_to_fetch), cache)
+          # Add to centralized album fetch manager
+          album_manager.add_album_request(
+            album_id, track_id, f'playlist:{playlist_id}')
 
       # Filter tracks added after cutoff date
       recent_tracks = []
@@ -666,11 +749,6 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
         if added_at > cutoff_date_aware:
           track = item['track']
           if track and track.get('id'):
-            # Cache track-to-album mapping
-            if track['id'] in track_album_mappings:
-              cache.set_track_album_mapping(
-                track['id'], track_album_mappings[track['id']])
-
             track['source'] = f'playlist:{playlist_id}'
             recent_tracks.append(track)
 
@@ -698,8 +776,6 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
 
       print(
         f"       ✅ Found {len(recent_tracks)} recent tracks (from {len(tracks)} total tracks)")
-      if album_ids_to_fetch:
-        print(f"       💾 Cached {len(album_ids_to_fetch)} new albums")
 
       # Cache the playlist data if we have a snapshot ID
       if current_snapshot_id:
@@ -719,7 +795,7 @@ def get_playlist_tracks(sp: spotipy.Spotify, playlist_ids: List[str], cutoff_dat
   return all_tracks
 
 
-def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
+def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache, album_manager: AlbumFetchManager) -> List[Dict[str, Any]]:
   """Get tracks from artists that were released after the cutoff date."""
   all_tracks = []
 
@@ -764,16 +840,12 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
 
       print(f"       📀 Found {len(recent_albums)} recent albums")
 
-      # Collect album IDs for batch caching
-      album_ids_to_cache = []
+      # Collect album requests for centralized fetching
       for album in recent_albums:
-        if album.get('id') and not cache.get_album(album['id']):
-          album_ids_to_cache.append(album['id'])
-
-      # Cache albums in batches if needed
-      if album_ids_to_cache:
-        print(f"       💾 Caching {len(album_ids_to_cache)} new albums...")
-        batch_fetch_albums(sp, album_ids_to_cache, cache)
+        if album.get('id'):
+          # Add to centralized album fetch manager
+          album_manager.add_album_request(
+            album['id'], f'artist_album:{album["id"]}', f'artist:{artist_id}')
 
       # Get tracks from recent albums
       for album in recent_albums:
@@ -790,9 +862,10 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
                 try:
                   release_date = parse_release_date(album['release_date'])
 
-                  # Cache track-to-album mapping
+                  # Add track-to-album mapping to centralized manager
                   if track.get('id') and album.get('id'):
-                    cache.set_track_album_mapping(track['id'], album['id'])
+                    album_manager.add_album_request(
+                      album['id'], track['id'], f'artist:{artist_id}')
 
                   all_tracks.append({
                       'id': track['id'],
@@ -822,7 +895,7 @@ def get_artist_tracks(sp: spotipy.Spotify, artist_ids: List[str], cutoff_date: d
   return all_tracks
 
 
-def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache) -> List[Dict[str, Any]]:
+def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: datetime.datetime, cache: CrawlCache, album_manager: AlbumFetchManager) -> List[Dict[str, Any]]:
   """Get tracks from labels that were released after the cutoff date."""
   all_tracks = []
 
@@ -842,9 +915,7 @@ def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: dat
       )
 
       if search_results and 'tracks' in search_results and 'items' in search_results['tracks']:
-        # Collect album IDs for batch fetching
-        album_ids_to_fetch = set()
-        track_album_mappings = {}  # Track which track belongs to which album
+        # Collect album requests for centralized fetching
         recent_tracks = []
         mismatched_labels = set()  # Track labels that don't match for reporting
 
@@ -861,17 +932,12 @@ def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: dat
 
                 # Use a high confidence threshold (90%) to ensure accurate matches
                 if label_match_ratio >= 90:
-                  # Collect album ID for batch fetching
+                  # Add to centralized album fetch manager
                   if track.get('album') and track['album'].get('id'):
                     album_id = track['album']['id']
                     track_id = track['id']
-
-                    # Store track-to-album mapping
-                    track_album_mappings[track_id] = album_id
-
-                    # Add to batch fetch list if not cached
-                    if not cache.get_album(album_id):
-                      album_ids_to_fetch.add(album_id)
+                    album_manager.add_album_request(
+                      album_id, track_id, f'label:{label_id}')
 
                   recent_tracks.append({
                       'id': track['id'],
@@ -893,14 +959,6 @@ def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: dat
               print(
                 f"         ⚠️  Warning: Could not parse release date '{track['album']['release_date']}' for track '{track.get('name', 'Unknown')}': {e}")
               continue
-
-        # Batch fetch all missing albums
-        if album_ids_to_fetch:
-          batch_fetch_albums(sp, list(album_ids_to_fetch), cache)
-
-        # Cache track-to-album mappings
-        for track_id, album_id in track_album_mappings.items():
-          cache.set_track_album_mapping(track_id, album_id)
 
         print(
           f"       ✅ Found {len(recent_tracks)} recent tracks from label {label_name}")
@@ -930,13 +988,14 @@ def deduplicate_tracks(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
   return unique_tracks
 
 
-def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, cutoff_date: Optional[datetime.datetime] = None, track_count: int = 0, all_tracks: Optional[List[Dict[str, Any]]] = None) -> str:
+def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, cutoff_date: Optional[datetime.datetime] = None, track_count: int = 0, all_tracks: Optional[List[Dict[str, Any]]] = None, custom_date: Optional[datetime.datetime] = None) -> str:
   """Generate playlist name with template variables."""
   # Ensure all_tracks is a list, not None
   if all_tracks is None:
     all_tracks = []
 
-  now = datetime.datetime.now()
+  # Use custom date if provided, otherwise use current date
+  now = custom_date if custom_date else datetime.datetime.now()
 
   # Calculate date range if cutoff_date is provided
   date_range_start = cutoff_date if cutoff_date else now - \

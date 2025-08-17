@@ -20,6 +20,7 @@ class CrawlCache:
     self.last_api_call = 0
     self.min_call_interval = 0.1  # 100ms between calls to respect rate limits
     self._dirty = False  # Track if cache has been modified
+    self._saving_on_exit = False  # Flag to prevent double saving
 
     # Set up signal handlers and exit handlers to preserve cache
     self._setup_signal_handlers()
@@ -210,8 +211,9 @@ class CrawlCache:
   def _setup_signal_handlers(self):
     """Set up signal handlers to save cache on interrupt."""
     def signal_handler(signum, frame):
-      print(f"\n⚠️  Received signal {signum}, saving cache before exit...")
-      self._save_cache_on_exit()
+      if not self._saving_on_exit:  # Prevent double saving
+        print(f"\n⚠️  Received signal {signum}, saving cache before exit...")
+        self._save_cache_on_exit()
       exit(0)
 
     # Register handlers for common interrupt signals
@@ -222,6 +224,10 @@ class CrawlCache:
 
   def _save_cache_on_exit(self):
     """Save cache to file when the application exits."""
+    if self._saving_on_exit:  # Already saving, skip
+      return
+    
+    self._saving_on_exit = True  # Set flag to prevent double saving
     try:
       if hasattr(self, 'cache') and self.cache and self._dirty:
         self._save_cache(force=True)
@@ -235,4 +241,5 @@ class CrawlCache:
 
   def force_save(self):
     """Force save the cache immediately."""
-    self._save_cache(force=True)
+    if not self._saving_on_exit:  # Prevent double saving
+      self._save_cache(force=True)
