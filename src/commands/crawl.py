@@ -83,6 +83,409 @@ class AlbumFetchManager:
     return self.track_album_mappings.copy()
 
 
+class ArtistFetchManager:
+  """
+  Centralized manager for collecting and fetching artist data across all jobs.
+  This optimizes API calls by making one call per artist and sharing results.
+  """
+
+  def __init__(self, sp: spotipy.Spotify, cache: CrawlCache):
+    self.sp = sp
+    self.cache = cache
+    # artist_id -> list of job requests
+    self.artist_requests: Dict[str, List[Dict[str, Any]]] = {}
+    # artist_id -> artist data
+    self.fetched_artists: Dict[str, Dict[str, Any]] = {}
+
+  def add_artist_request(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime):
+    """Add an artist request with job-specific filtering criteria."""
+    if artist_id not in self.artist_requests:
+      self.artist_requests[artist_id] = []
+
+    self.artist_requests[artist_id].append({
+      'job_name': job_name,
+      'cutoff_date': cutoff_date
+    })
+
+  def fetch_all_artists(self) -> Dict[str, Dict[str, Any]]:
+    """Fetch all requested artists in optimized batches."""
+    if not self.artist_requests:
+      print("       💾 No artists to fetch")
+      return {}
+
+    print(
+      f"       🔄 Fetching {len(self.artist_requests)} artists in optimized batches...")
+
+    for artist_id in self.artist_requests:
+      try:
+        # NOTE(jeroen-meijer): Rate limiting
+        self.cache.rate_limit_wait()
+
+        # Get artist info
+        artist_info = self.sp.artist(artist_id)
+        if artist_info:
+          artist_name = artist_info.get('name', 'Unknown Artist')
+          print(f"         🎤 Fetching artist: {artist_name} ({artist_id})")
+
+          # Get artist's albums and singles
+          albums = self.sp.artist_albums(
+            artist_id,
+            include_groups='album,single',
+            limit=50
+          )
+
+          if albums and 'items' in albums:
+            self.fetched_artists[artist_id] = {
+              'info': artist_info,
+              'albums': albums['items']
+            }
+            print(f"           ✅ Found {len(albums['items'])} albums")
+          else:
+            print(f"           ⚠️  No albums found for artist {artist_name}")
+            self.fetched_artists[artist_id] = {
+              'info': artist_info,
+              'albums': []
+            }
+
+      except Exception as e:
+        print(f"         ❌ Error fetching artist {artist_id}: {e}")
+        continue
+
+    return self.fetched_artists
+
+  def get_artist_tracks_for_job(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+    """Get tracks for a specific artist and job, filtering by the job's cutoff date."""
+    if artist_id not in self.fetched_artists:
+      return []
+
+    artist_data = self.fetched_artists[artist_id]
+    artist_info = artist_data['info']
+    albums = artist_data['albums']
+
+    # Pre-filter albums by release date for this specific job
+    recent_albums = []
+    for album in albums:
+      if album and album.get('release_date'):
+        try:
+          release_date = parse_release_date(album['release_date'])
+          if release_date > cutoff_date:
+            recent_albums.append(album)
+        except ValueError as e:
+          print(
+            f"           ⚠️  Warning: Could not parse release date '{album['release_date']}' for album '{album.get('name', 'Unknown')}': {e}")
+          continue
+
+    # Get tracks from recent albums
+    tracks = []
+    for album in recent_albums:
+      try:
+        # NOTE(jeroen-meijer): Rate limiting
+        self.cache.rate_limit_wait()
+
+        album_tracks = self.sp.album_tracks(album['id'])
+        if album_tracks and 'items' in album_tracks:
+          for track in album_tracks['items']:
+            if track:
+              try:
+                release_date = parse_release_date(album['release_date'])
+                tracks.append({
+                  'id': track['id'],
+                  'uri': track['uri'],
+                  'name': track['name'],
+                  'artists': [artist['name'] for artist in track['artists']] if track.get('artists') else [],
+                  'album_release_date': album['release_date'],
+                  'added_at': release_date,
+                  'source': f'artist:{artist_id}'
+                })
+              except ValueError as e:
+                print(
+                  f"             ⚠️  Warning: Could not parse release date for track '{track.get('name', 'Unknown')}': {e}")
+                continue
+
+      except Exception as e:
+        print(f"           ⚠️  Error processing album {album['id']}: {e}")
+
+    return tracks
+
+
+class LabelFetchManager:
+  """
+  Centralized manager for collecting and fetching label data across all jobs.
+  This optimizes API calls by making one search call per label and sharing results.
+  """
+
+  def __init__(self, sp: spotipy.Spotify, cache: CrawlCache):
+    self.sp = sp
+    self.cache = cache
+    # label_name -> list of job requests
+    self.label_requests: Dict[str, List[Dict[str, Any]]] = {}
+    # label_name -> list of tracks
+    self.fetched_labels: Dict[str, List[Dict[str, Any]]] = {}
+
+  def add_label_request(self, label_name: str, job_name: str, cutoff_date: datetime.datetime):
+    """Add a label request with job-specific filtering criteria."""
+    if label_name not in self.label_requests:
+      self.label_requests[label_name] = []
+
+    self.label_requests[label_name].append({
+      'job_name': job_name,
+      'cutoff_date': cutoff_date
+    })
+
+  def fetch_all_labels(self) -> Dict[str, List[Dict[str, Any]]]:
+    """Fetch all requested labels in optimized batches."""
+    if not self.label_requests:
+      print("       💾 No labels to fetch")
+      return {}
+
+    print(
+      f"       🔄 Fetching {len(self.label_requests)} labels in optimized batches...")
+
+    for label_name in self.label_requests:
+      try:
+        print(f"         🏷️  Fetching label: {label_name}")
+
+        # Search for tracks by label
+        search_query = f'label:"{label_name}"'
+        search_results = self.sp.search(
+          q=search_query,
+          type='track',
+          limit=50
+        )
+
+        if search_results and 'tracks' in search_results and 'items' in search_results['tracks']:
+          self.fetched_labels[label_name] = search_results['tracks']['items']
+          print(
+            f"           ✅ Found {len(search_results['tracks']['items'])} tracks")
+        else:
+          print(
+            f"           ⚠️  No search results found for label {label_name}")
+          self.fetched_labels[label_name] = []
+
+      except Exception as e:
+        print(f"         ❌ Error fetching label {label_name}: {e}")
+        continue
+
+    return self.fetched_labels
+
+  def get_label_tracks_for_job(self, label_name: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+    """Get tracks for a specific label and job, filtering by the job's cutoff date."""
+    if label_name not in self.fetched_labels:
+      return []
+
+    tracks = self.fetched_labels[label_name]
+    recent_tracks = []
+    mismatched_labels = set()
+
+    for track in tracks:
+      if track and track.get('album') and track['album'].get('release_date'):
+        try:
+          release_date = parse_release_date(track['album']['release_date'])
+          if release_date > cutoff_date:
+            # NOTE(jeroen-meijer): Validate that the track's actual label matches our search term
+            track_label = track['album'].get('label', '')
+            label_match_ratio = fuzz.ratio(
+              label_name.lower(), track_label.lower())
+
+            # Use a high confidence threshold (90%) to ensure accurate matches
+            if label_match_ratio >= 90:
+              recent_tracks.append({
+                'id': track['id'],
+                'uri': track['uri'],
+                'name': track['name'],
+                'artists': [artist['name'] for artist in track['artists']] if track.get('artists') else [],
+                'album_release_date': track['album']['release_date'],
+                'added_at': release_date,
+                'source': f'label:{label_name}'
+              })
+            else:
+              # Track mismatched labels for reporting
+              if track_label and track_label not in mismatched_labels:
+                mismatched_labels.add(track_label)
+
+        except ValueError as e:
+          print(
+            f"           ⚠️  Warning: Could not parse release date '{track['album']['release_date']}' for track '{track.get('name', 'Unknown')}': {e}")
+          continue
+
+    if mismatched_labels:
+      print(
+        f"           ⚠️  Skipped tracks from mismatched labels: {', '.join(sorted(mismatched_labels))}")
+
+    return recent_tracks
+
+
+class PlaylistFetchManager:
+  """
+  Centralized manager for collecting and fetching playlist data across all jobs.
+  This optimizes API calls by making one call per playlist and sharing results.
+  """
+
+  def __init__(self, sp: spotipy.Spotify, cache: CrawlCache):
+    self.sp = sp
+    self.cache = cache
+    # playlist_id -> list of job requests
+    self.playlist_requests: Dict[str, List[Dict[str, Any]]] = {}
+    # playlist_id -> playlist data
+    self.fetched_playlists: Dict[str, Dict[str, Any]] = {}
+
+  def add_playlist_request(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime):
+    """Add a playlist request with job-specific filtering criteria."""
+    if playlist_id not in self.playlist_requests:
+      self.playlist_requests[playlist_id] = []
+
+    self.playlist_requests[playlist_id].append({
+      'job_name': job_name,
+      'cutoff_date': cutoff_date
+    })
+
+  def fetch_all_playlists(self) -> Dict[str, Dict[str, Any]]:
+    """Fetch all requested playlists in optimized batches."""
+    if not self.playlist_requests:
+      print("       💾 No playlists to fetch")
+      return {}
+
+    print(
+      f"       🔄 Fetching {len(self.playlist_requests)} playlists in optimized batches...")
+
+    for playlist_id in self.playlist_requests:
+      try:
+        # Check cache first
+        cached_playlist = self.cache.get_playlist(playlist_id)
+
+        # Get playlist info and snapshot ID to check if it has changed
+        try:
+          playlist_info = self.sp.playlist(
+            playlist_id, fields='name,snapshot_id')
+          if playlist_info is None:
+            playlist_name = 'Unknown Playlist'
+            current_snapshot_id = None
+          else:
+            playlist_name = playlist_info.get('name', 'Unknown Playlist')
+            current_snapshot_id = playlist_info.get('snapshot_id')
+
+          print(
+            f"         📜 Fetching playlist: {playlist_name} ({playlist_id})")
+
+          # Check if playlist has changed - if not, use cached data completely
+          if cached_playlist and current_snapshot_id and not self.cache.is_playlist_changed(playlist_id, current_snapshot_id):
+            print(
+              f"           💾 Using cached playlist data (snapshot: {current_snapshot_id})")
+            self.fetched_playlists[playlist_id] = {
+              'info': playlist_info,
+              'tracks': cached_playlist.get('data', {}).get('tracks', []),
+              'snapshot_id': current_snapshot_id,
+              'cached': True
+            }
+            continue
+
+        except Exception as e:
+          print(
+            f"         📜 Fetching playlist: {playlist_id} (could not fetch info: {e})")
+          playlist_name = f"Playlist {playlist_id}"
+          current_snapshot_id = None
+
+        # If we reach here, we need to fetch tracks from Spotify
+        print(f"           🔄 Fetching tracks from Spotify...")
+
+        # Get playlist tracks with added_at field and album information
+        tracks = exhaust_fetch(
+          fetch=lambda offset, limit: self.sp.playlist_items(
+            playlist_id,
+            offset=offset,
+            limit=limit,
+            fields='items(added_at,track(id,uri,name,artists(name),album(id,name,release_date,label))),next'
+          ),
+          map_elements=lambda res: res['items']
+        )
+
+        # NOTE(jeroen-meijer): Convert tracks to use album ID references instead of full album data
+        processed_tracks = []
+        for item in tracks:
+          if not item or not item.get('track'):
+            continue
+
+          track = item['track']
+          if track and track.get('id'):
+            # Create a copy of the track with album ID reference instead of full album data
+            processed_track = {
+              'id': track['id'],
+              'uri': track['uri'],
+              'name': track['name'],
+              'artists': track.get('artists', []),
+              'album_id': track['album']['id'] if track.get('album') and track['album'].get('id') else None,
+              'source': f'playlist:{playlist_id}'
+            }
+            processed_tracks.append({
+              'track': processed_track,
+              'added_at': item['added_at']
+            })
+
+        self.fetched_playlists[playlist_id] = {
+          'info': playlist_info if 'playlist_info' in locals() else {'name': playlist_name},
+          'tracks': processed_tracks,
+          'snapshot_id': current_snapshot_id,
+          'cached': False
+        }
+
+        # Cache the playlist data if we have a snapshot ID
+        if current_snapshot_id:
+          playlist_data = {
+            'name': playlist_name,
+            'tracks': processed_tracks
+          }
+          self.cache.set_playlist(
+            playlist_id, playlist_data, current_snapshot_id)
+          print(
+            f"           💾 Cached playlist data (snapshot: {current_snapshot_id})")
+
+        print(f"           ✅ Found {len(processed_tracks)} tracks")
+
+      except Exception as e:
+        print(f"         ❌ Error fetching playlist {playlist_id}: {e}")
+        continue
+
+    return self.fetched_playlists
+
+  def get_playlist_tracks_for_job(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+    """Get tracks for a specific playlist and job, filtering by the job's cutoff date."""
+    if playlist_id not in self.fetched_playlists:
+      return []
+
+    playlist_data = self.fetched_playlists[playlist_id]
+    tracks = playlist_data['tracks']
+
+    # Filter tracks added after cutoff date
+    recent_tracks = []
+    for item in tracks:
+      if not item or not item.get('track'):
+        continue
+
+      added_at = datetime.datetime.fromisoformat(
+        item['added_at'].replace('Z', '+00:00'))
+      # Make cutoff_date timezone-aware for comparison
+      cutoff_date_aware = cutoff_date.replace(tzinfo=datetime.timezone.utc)
+
+      if added_at > cutoff_date_aware:
+        track = item['track']
+        if track and track.get('id'):
+          # NOTE(jeroen-meijer): Reconstruct full track data from album ID reference
+          if track.get('album_id'):
+            cached_album = self.cache.get_album(track['album_id'])
+            if cached_album:
+              track['album'] = cached_album['data']
+            else:
+              # Fallback if album not found in cache
+              track['album'] = {'release_date': None}
+          else:
+            track['album'] = {'release_date': None}
+
+          track['source'] = f'playlist:{playlist_id}'
+          recent_tracks.append(track)
+
+    return recent_tracks
+
+
 def extract_essential_album_data(album_data: Dict[str, Any]) -> Dict[str, Any]:
   """
   Extract only the essential album data fields needed for caching.
@@ -408,18 +811,81 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
   print(f"📋 Found {len(jobs)} job(s) to process")
   print()
 
-  # Collect all job reports
-  all_reports = []
+  # Create centralized fetch managers for optimization
+  album_manager = AlbumFetchManager(sp, cache)
+  artist_manager = ArtistFetchManager(sp, cache)
+  label_manager = LabelFetchManager(sp, cache)
+  playlist_manager = PlaylistFetchManager(sp, cache)
 
+  # First pass: collect all requests from all jobs
+  print("🔄 Collecting requests from all jobs...")
+  for job in jobs:
+    job_name = job.get('name', 'Unnamed Job')
+
+    # Validate job configuration
+    if not validate_job_config(job):
+      print(f"⚠️  Skipping job '{job_name}' due to configuration errors")
+      continue
+
+    # Get job configuration
+    inputs = job.get('inputs', {})
+    filters = job.get('filters', {})
+
+    # Calculate time window
+    days_back = filters.get('added_between_days', 7)
+    current_time = custom_date if custom_date else datetime.datetime.now()
+    cutoff_date = current_time - datetime.timedelta(days=days_back)
+
+    # Collect playlist requests
+    playlist_ids = resolve_references(inputs.get('playlists') or [], config)
+    for playlist_id in playlist_ids:
+      playlist_manager.add_playlist_request(playlist_id, job_name, cutoff_date)
+
+    # Collect artist requests
+    artist_ids = resolve_references(inputs.get('artists') or [], config)
+    for artist_id in artist_ids:
+      artist_manager.add_artist_request(artist_id, job_name, cutoff_date)
+
+    # Collect label requests
+    label_ids = resolve_references(inputs.get('labels') or [], config)
+    for label_id in label_ids:
+      label_manager.add_label_request(label_id, job_name, cutoff_date)
+
+  # Second pass: fetch all data in optimized batches
+  print("🔄 Fetching all data in optimized batches...")
+  print()
+
+  # Fetch playlists
+  playlist_manager.fetch_all_playlists()
+  print()
+
+  # Fetch artists
+  artist_manager.fetch_all_artists()
+  print()
+
+  # Fetch labels
+  label_manager.fetch_all_labels()
+  print()
+
+  # Fetch albums (this will be called by individual job processing)
+  print("🔄 Albums will be fetched during job processing...")
+  print()
+
+  # Third pass: process each job with the fetched data
+  all_reports = []
   for job in jobs:
     try:
-      report = process_job(sp, job, config, cache, custom_date)
+      report = process_job_optimized(sp, job, config, cache, custom_date,
+                                     album_manager, artist_manager, label_manager, playlist_manager)
       if report:
         all_reports.append(report)
     except Exception as e:
       print(f"⚠️  Warning: Job '{job.get('name', 'Unnamed')}' failed: {e}")
       print("   Continuing with next job...")
       continue
+
+  # Print optimization statistics
+  print_optimization_stats(artist_manager, label_manager, playlist_manager)
 
   # Save combined report if any jobs were processed (non-critical)
   try:
@@ -430,6 +896,207 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
   except Exception as e:
     print(f"⚠️  Warning: Could not save combined report: {e}")
     print("   Playlists were still created successfully.")
+
+
+def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache,
+                          custom_date: datetime.datetime, album_manager: AlbumFetchManager,
+                          artist_manager: ArtistFetchManager, label_manager: LabelFetchManager,
+                          playlist_manager: PlaylistFetchManager):
+  """Process a single job from the configuration using optimized centralized managers."""
+  job_name = job.get('name', 'Unnamed Job')
+  print(f"🔄 Processing job: {job_name}")
+
+  # Validate job configuration
+  if not validate_job_config(job):
+    print(f"❌ Skipping job '{job_name}' due to configuration errors")
+    print()
+    return None
+
+  # Get job configuration
+  inputs = job.get('inputs', {})
+  filters = job.get('filters', {})
+  options = job.get('options', {})
+  output_playlist = job.get('output_playlist', {})
+
+  # Calculate time window
+  days_back = filters.get('added_between_days', 7)
+  current_time = custom_date if custom_date else datetime.datetime.now()
+  cutoff_date = current_time - datetime.timedelta(days=days_back)
+
+  if custom_date:
+    print(f"📅 Using custom date: {custom_date.strftime('%Y-%m-%d')}")
+    print(
+      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+  else:
+    print(
+      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+
+  # Collect all tracks
+  all_tracks = []
+
+  # Process playlists using centralized manager
+  playlist_ids = resolve_references(inputs.get('playlists') or [], config)
+  if playlist_ids:
+    print(f"📜 Processing {len(playlist_ids)} playlist(s)...")
+    try:
+      playlist_tracks = []
+      for playlist_id in playlist_ids:
+        tracks = playlist_manager.get_playlist_tracks_for_job(
+          playlist_id, job_name, cutoff_date)
+        playlist_tracks.extend(tracks)
+
+      all_tracks.extend(playlist_tracks)
+      print(f"   Found {len(playlist_tracks)} tracks from playlists")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing playlists: {e}")
+      print("   Continuing with other sources...")
+
+  # Process artists using centralized manager
+  artist_ids = resolve_references(inputs.get('artists') or [], config)
+  if artist_ids:
+    print(f"🎤 Processing {len(artist_ids)} artist(s)...")
+    try:
+      artist_tracks = []
+      for artist_id in artist_ids:
+        tracks = artist_manager.get_artist_tracks_for_job(
+          artist_id, job_name, cutoff_date)
+        artist_tracks.extend(tracks)
+
+      all_tracks.extend(artist_tracks)
+      print(f"   Found {len(artist_tracks)} tracks from artists")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing artists: {e}")
+      print("   Continuing with other sources...")
+
+  # Process labels using centralized manager
+  label_ids = resolve_references(inputs.get('labels') or [], config)
+  if label_ids:
+    print(f"🏷️  Processing {len(label_ids)} label(s)...")
+    try:
+      label_tracks = []
+      for label_id in label_ids:
+        tracks = label_manager.get_label_tracks_for_job(
+          label_id, job_name, cutoff_date)
+        label_tracks.extend(tracks)
+
+      all_tracks.extend(label_tracks)
+      print(f"   Found {len(label_tracks)} tracks from labels")
+    except Exception as e:
+      print(f"   ⚠️  Warning: Error processing labels: {e}")
+      print("   Continuing with other sources...")
+
+  # Collect album requests from all tracks and fetch albums
+  print("🔄 Collecting album requests and fetching albums...")
+  for track in all_tracks:
+    if track.get('album_id'):
+      album_manager.add_album_request(
+        track['album_id'], track['id'], track.get('source', 'unknown'))
+
+  # Fetch all albums in optimized batches
+  album_manager.fetch_all_albums()
+
+  if not all_tracks:
+    print("⚠️  No tracks found for this job - will create empty playlist")
+    # Continue to create the playlist even if empty
+
+  # Deduplicate tracks if requested
+  if options.get('deduplicate', True):
+    try:
+      unique_tracks = deduplicate_tracks(all_tracks)
+      print(f"🔄 Deduplicated: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      all_tracks = unique_tracks
+    except Exception as e:
+      print(f"⚠️  Warning: Error during deduplication: {e}")
+      print("   Continuing with original track list...")
+
+  # Create playlist
+  try:
+    # Ensure all_tracks is a list, not None
+    if all_tracks is None:
+      all_tracks = []
+
+    playlist_name = generate_playlist_name(
+      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+    playlist_description = generate_playlist_name(
+      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+    is_public = output_playlist.get('public', False)
+
+    print(f"📝 Creating playlist: {playlist_name}")
+  except Exception as e:
+    print(f"⚠️  Warning: Error generating playlist name: {e}")
+    print("   Using fallback playlist name...")
+    playlist_name = f"Generated Playlist {datetime.datetime.now().strftime('%Y-%m-%d')}"
+    playlist_description = "Generated by Spotify Crawler"
+    is_public = output_playlist.get('public', False)
+
+  try:
+    # Get current user for playlist creation
+    current_user = get_user_or_sign_in(sp)
+    if current_user is None:
+      print("❌ Error: Could not get current user for playlist creation")
+      return
+
+    # Create the playlist
+    playlist = sp.user_playlist_create(
+        user=current_user['id'],
+        name=playlist_name,
+        public=is_public,
+        description=playlist_description
+    )
+
+    if playlist is None:
+      print("❌ Error: Failed to create playlist")
+      return
+
+    # Add tracks to playlist
+    if all_tracks:
+      try:
+        track_uris = [track['uri'] for track in all_tracks]
+
+        # Add tracks in batches of 100 (Spotify API limit)
+        for i in range(0, len(track_uris), 100):
+          batch = track_uris[i:i + 100]
+          sp.playlist_add_items(playlist['id'], batch)
+
+        print(f"✅ Added {len(all_tracks)} tracks to playlist")
+      except Exception as e:
+        print(f"⚠️  Warning: Error adding tracks to playlist: {e}")
+        print("   Playlist was created but tracks could not be added.")
+    else:
+      print("⚠️  No tracks to add to playlist")
+
+    # Show playlist URL if available
+    try:
+      if playlist.get('external_urls') and playlist['external_urls'].get('spotify'):
+        print(f"🔗 Playlist URL: {playlist['external_urls']['spotify']}")
+    except Exception as e:
+      print(f"⚠️  Warning: Could not display playlist URL: {e}")
+
+    # Process playlist cover (non-critical - continue if it fails)
+    try:
+      if process_playlist_cover(sp, job, playlist['id'], playlist_name):
+        print(f"✅ Playlist cover processed successfully")
+      else:
+        print(f"⚠️  Warning: Could not process playlist cover")
+    except Exception as e:
+      print(f"⚠️  Warning: Error processing playlist cover: {e}")
+      print("   Continuing with playlist creation...")
+
+    # Create crawl report (non-critical - continue if it fails)
+    try:
+      report = create_crawl_report(job, all_tracks, cutoff_date)
+      return report
+    except Exception as e:
+      print(f"⚠️  Warning: Could not create crawl report: {e}")
+      print("   Continuing with playlist creation...")
+      return None
+
+  except Exception as e:
+    print(f"❌ Error creating playlist: {e}")
+    return None
+
+  print()
+  return None
 
 
 def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache, custom_date: datetime.datetime = None):
@@ -1111,6 +1778,69 @@ def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, 
     input_labels) if input_labels else 'no labels')
 
   return name
+
+
+def print_optimization_stats(artist_manager: ArtistFetchManager, label_manager: LabelFetchManager, playlist_manager: PlaylistFetchManager):
+  """Print statistics about the optimization benefits."""
+  print("📊 Optimization Statistics:")
+  print("=" * 50)
+
+  # Artist optimization stats
+  if artist_manager.artist_requests:
+    total_artist_requests = sum(
+      len(requests) for requests in artist_manager.artist_requests.values())
+    unique_artists = len(artist_manager.artist_requests)
+    artist_savings = total_artist_requests - unique_artists
+    print(
+      f"🎤 Artists: {total_artist_requests} requests → {unique_artists} API calls (saved {artist_savings} calls)")
+  else:
+    print("🎤 Artists: No artist requests")
+
+  # Label optimization stats
+  if label_manager.label_requests:
+    total_label_requests = sum(len(requests)
+                               for requests in label_manager.label_requests.values())
+    unique_labels = len(label_manager.label_requests)
+    label_savings = total_label_requests - unique_labels
+    print(
+      f"🏷️  Labels: {total_label_requests} requests → {unique_labels} API calls (saved {label_savings} calls)")
+  else:
+    print("🏷️  Labels: No label requests")
+
+  # Playlist optimization stats
+  if playlist_manager.playlist_requests:
+    total_playlist_requests = sum(
+      len(requests) for requests in playlist_manager.playlist_requests.values())
+    unique_playlists = len(playlist_manager.playlist_requests)
+    playlist_savings = total_playlist_requests - unique_playlists
+    print(
+      f"📜 Playlists: {total_playlist_requests} requests → {unique_playlists} API calls (saved {playlist_savings} calls)")
+  else:
+    print("📜 Playlists: No playlist requests")
+
+  # Total savings
+  total_requests = (
+    sum(len(requests) for requests in artist_manager.artist_requests.values()) +
+    sum(len(requests) for requests in label_manager.label_requests.values()) +
+    sum(len(requests)
+        for requests in playlist_manager.playlist_requests.values())
+  )
+  total_unique = (
+    len(artist_manager.artist_requests) +
+    len(label_manager.label_requests) +
+    len(playlist_manager.playlist_requests)
+  )
+  total_savings = total_requests - total_unique
+
+  if total_savings > 0:
+    print(
+      f"💾 Total: {total_requests} requests → {total_unique} API calls (saved {total_savings} calls)")
+    print(
+      f"📈 Efficiency improvement: {((total_savings / total_requests) * 100):.1f}%")
+  else:
+    print("💾 Total: No optimization benefits (no duplicate requests)")
+
+  print()
 
 
 def get_week_number(date: datetime.datetime) -> int:
