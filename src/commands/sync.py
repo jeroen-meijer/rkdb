@@ -1,6 +1,9 @@
 import datetime
 import sys
 import time
+import threading
+import queue
+import concurrent.futures
 import constants
 import deepmerge
 import humanfriendly
@@ -16,12 +19,97 @@ import traceback
 
 CustomTrack = namedtuple('CustomTrack', ['rekordbox_id', 'index', 'target'])
 
+# NOTE(jeroen-meijer): Structure to hold fetched playlist data for background processing
+PlaylistData = namedtuple('PlaylistData', ['playlist', 'items', 'error'])
+
+
+def blue_log(message: str):
+  """Log message in blue (background fetching activities)"""
+  print(f"\033[94m🧵 {message}\033[0m")
+
+
+def orange_log(message: str):
+  """Log message in orange (main thread waiting/blocking activities)"""
+  print(f"\033[93m⏳ {message}\033[0m")
+
 # Notes
 # Typical spotify playlist link: https://open.spotify.com/playlist/1UObZqUr1MtbveqsSw6sFP?si=5d14331bb8174c1e
 # Everything after the last slash is the playlist ID, until and not including the question mark (if any)
 # We will want to parse the playlist ID from the URL
 # The custom_playlist_ids arg may contain any number of playlist IDs _or_ playlist URLs.
 # The URLs need to be parsed to get the playlist ID, and this new list should override the custom_playlist_ids list.
+
+
+def fetch_playlist_tracks(sp, sp_playlist) -> PlaylistData:
+  """
+  Fetch tracks for a single playlist.
+  Returns PlaylistData with playlist, items (or None if error), and error info.
+  """
+  try:
+    sp_playlist_items = exhaust_fetch(
+      fetch=lambda offset, limit: sp.playlist_items(
+        sp_playlist['id'],
+        offset=offset,
+        limit=limit,
+        fields='items(added_at,track(id,artists,name)),next'
+      ),
+      # For each res, get the items (preserving both track and added_at)
+      map_elements=lambda res: res['items']
+    )
+    return PlaylistData(playlist=sp_playlist, items=sp_playlist_items, error=None)
+  except Exception as e:
+    return PlaylistData(playlist=sp_playlist, items=None, error=e)
+
+
+def playlist_fetcher_worker(sp, all_playlists, results_queue):
+  """
+  Background worker thread that fetches all playlist tracks.
+  Gets all playlists upfront and manages internal batching (max 3 concurrent).
+  """
+  blue_log(f"Background fetcher starting with {len(all_playlists)} playlists")
+
+  # Use ThreadPoolExecutor to manage up to 3 concurrent fetches
+  with concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_prefix="PlaylistFetch") as executor:
+    try:
+      # Submit all playlists for fetching
+      future_to_playlist = {
+        executor.submit(fetch_playlist_with_logging, sp, playlist): playlist
+        for playlist in all_playlists
+      }
+
+      # Process results as they complete (in completion order, not submission order)
+      for future in concurrent.futures.as_completed(future_to_playlist):
+        playlist = future_to_playlist[future]
+        try:
+          result = future.result()
+          results_queue.put(result)
+        except Exception as e:
+          blue_log(f"❌ Background worker error for \"{playlist['name']}\": {e}")
+          error_result = PlaylistData(playlist=playlist, items=None, error=e)
+          results_queue.put(error_result)
+
+    except Exception as e:
+      blue_log(f"❌ Critical error in background fetcher: {e}")
+
+  blue_log("Background fetcher completed all playlists")
+
+
+def fetch_playlist_with_logging(sp, sp_playlist) -> PlaylistData:
+  """
+  Fetch tracks for a single playlist with logging.
+  Used by the background worker.
+  """
+  blue_log(f"Fetching tracks for playlist: \"{sp_playlist['name']}\"...")
+
+  result = fetch_playlist_tracks(sp, sp_playlist)
+
+  if result.error:
+    blue_log(f"❌ Failed to fetch \"{sp_playlist['name']}\": {result.error}")
+  else:
+    blue_log(
+      f"✅ Fetched {len(result.items)} tracks for \"{sp_playlist['name']}\"")
+
+  return result
 
 
 def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
@@ -118,7 +206,7 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
 
   itunes_rate_limit_reached = False
 
-  def sync_playlist(sp_playlist) -> dict:
+  def sync_playlist(sp_playlist, sp_playlist_items) -> dict:
     # A dict that maps the position of each track in the playlist (starting from 1)
     # to a dict containing the Spotify and Rekordbox track information.
     # If no rekordbox track was found, the value on the 'rekordbox' key will be None.
@@ -147,18 +235,7 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
     if rb_playlist_key != None:
       log(f"Detected camelot key: {rb_playlist_key.ScaleName}")
 
-    log(f"Fetching tracks...")
-    sp_playlist_tracks = exhaust_fetch(
-      fetch=lambda offset, limit: sp.playlist_items(
-        sp_playlist['id'],
-        offset=offset,
-        limit=limit,
-        # fields=['items(track(id,artists,name,added_at))']  # Check
-      ),
-      # For each res, get the items, and map each of those items to the 'track'
-      map_elements=lambda res: list(
-        map(lambda item: item['track'], res['items']))
-    )
+    log(f"Processing {len(sp_playlist_items)} tracks...")
 
     log(f"Creating playlist")
     rb_playlist_with_same_name = first_or_none(
@@ -194,8 +271,10 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
 
     rb_playlist_song_queue: List[r.db6.tables.DjmdContent | None] = []
 
-    for track_index in range(len(sp_playlist_tracks)):
-      sp_track = sp_playlist_tracks[track_index]
+    for track_index in range(len(sp_playlist_items)):
+      sp_playlist_item = sp_playlist_items[track_index]
+      sp_track = sp_playlist_item['track']
+      sp_track_added_at = sp_playlist_item['added_at']
       sp_track_id = sp_track['id']
       sp_track_artist_str = ', '.join(
         list(map(lambda artist: artist['name'], sp_track['artists'])))
@@ -236,12 +315,31 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
               log(f"  ├ ❗️ Failed to retrieve iTunes URL. Error: {e}")
             log(f"  ├    Skipping...")
         log(f"  └ ➕ Adding track to missing tracks database...")
+
+        # Use the playlist added_at date, or if track exists in multiple playlists, use the latest date
+        existing_date_added = existing_entry.get('date_added', None)
+        if existing_date_added:
+          # Convert existing date to datetime for comparison
+          try:
+            existing_dt = datetime.datetime.fromisoformat(
+              existing_date_added.replace('Z', '+00:00'))
+            playlist_added_dt = datetime.datetime.fromisoformat(
+              sp_track_added_at.replace('Z', '+00:00'))
+            # Use the latest date between existing and current playlist
+            final_date_added = max(existing_dt, playlist_added_dt).isoformat()
+          except:
+            # Fallback to playlist date if parsing fails
+            final_date_added = sp_track_added_at
+        else:
+          # First time seeing this track, use playlist added_at date
+          final_date_added = sp_track_added_at
+
         missing_tracks_db[sp_track['id']] = {
           'artist': sp_track_artist_str,
           'title': sp_track_name_str,
           'itunes_url': itunes_url,
           'ignored': False,
-          'date_added': existing_entry.get('date_added', datetime.datetime.now().isoformat())
+          'date_added': final_date_added
         }
 
       log(f"🔎 Searching for track:   [{sp_track_id}] \"{sp_track_full_str}\"")
@@ -507,9 +605,66 @@ def sync_spotify_playlists_to_rekordbox(custom_playlist_ids: List[str] = []):
   try:
     start_datetime = datetime.datetime.now()
 
-    for sp_playlist in sp_target_playlists:
-      res = sync_playlist(sp_playlist)
-      sync_report[sp_playlist['name']] = res
+    # NOTE(jeroen-meijer): Set up background fetching for playlist tracks
+    results_queue = queue.Queue()
+
+    # Start background fetcher thread with ALL playlists
+    fetcher_thread = threading.Thread(
+      target=playlist_fetcher_worker,
+      args=(sp, sp_target_playlists, results_queue),
+      daemon=True
+    )
+    fetcher_thread.start()
+
+    # Process playlists as their tracks become available
+    processed_count = 0
+    total_playlists = len(sp_target_playlists)
+
+    while processed_count < total_playlists:
+      try:
+        # Check if data is immediately available
+        if results_queue.empty():
+          orange_log(
+            f"Waiting for background fetcher... ({processed_count + 1}/{total_playlists})")
+
+        # Get next fetched playlist data (results come in completion order, not original order)
+        playlist_data = results_queue.get(timeout=30)  # 30 second timeout
+
+        # Log that we got the data and are starting processing
+        if not playlist_data.error:
+          print(
+            f"🎵 Processing playlist: \"{playlist_data.playlist['name']}\" ({len(playlist_data.items)} tracks)")
+
+        if playlist_data.error:
+          print(
+            f"❌ Error fetching tracks for playlist '{playlist_data.playlist['name']}': {playlist_data.error}")
+          # Try to fetch synchronously as fallback
+          print(f"🔄 Retrying synchronously...")
+          fallback_data = fetch_playlist_tracks(sp, playlist_data.playlist)
+          if fallback_data.error:
+            print(f"❌ Fallback failed too: {fallback_data.error}")
+            print(f"⏩ Skipping playlist '{playlist_data.playlist['name']}'")
+            processed_count += 1
+            continue
+          else:
+            playlist_data = fallback_data
+
+        # Process the playlist with its fetched tracks
+        res = sync_playlist(playlist_data.playlist, playlist_data.items)
+        sync_report[playlist_data.playlist['name']] = res
+        processed_count += 1
+
+      except queue.Empty:
+        print("⏱️  Timeout waiting for playlist data - continuing anyway")
+        break
+
+    # Wait for background fetcher to complete
+    blue_log("Waiting for background fetcher to complete...")
+    fetcher_thread.join(timeout=10)  # Wait up to 10 seconds for completion
+    if fetcher_thread.is_alive():
+      blue_log("⚠️  Background fetcher still running after timeout")
+    else:
+      blue_log("Background fetcher completed")
 
     end_datetime = datetime.datetime.now()
     print(f"Synced all playlists in {
