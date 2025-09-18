@@ -71,8 +71,9 @@ def test_cover_upload(job_name: str, playlist_id: str):
   # Get caption from config or use playlist name
   caption = cover_config.get('caption', playlist_name)
 
-  # Apply template variables to caption
-  caption = apply_template_variables(caption, job, playlist_name)
+  # Apply template variables to caption using the effective now
+  caption = apply_template_variables(
+    caption, job, playlist_name, cutoff_date, now)
 
   print(f"📝 Playlist name: {playlist_name}")
   print(f"📝 Caption: {caption}")

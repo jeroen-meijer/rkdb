@@ -10,6 +10,7 @@ from commands.crawl import crawl_spotify_playlists
 from commands.extract import extract_playlist_data
 from commands.test_cover import test_cover_generation
 from cache import CrawlCache
+from services import setup_rekordbox
 
 
 def parse_arguments():
@@ -85,6 +86,8 @@ def validate_date(date_str):
 
 def main():
   print("--- rkdb ---")
+  
+  return
 
   # Parse arguments
   try:

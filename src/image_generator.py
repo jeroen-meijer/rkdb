@@ -1,6 +1,7 @@
 import os
 import re
 from typing import Optional, Dict, Any, List
+import datetime
 from PIL import Image, ImageDraw, ImageFont
 import requests
 from io import BytesIO
@@ -227,7 +228,8 @@ def generate_playlist_cover(
     if lines:
       # Get the bounding box of a sample line to calculate proper line height
       sample_bbox = draw.textbbox((0, 0), lines[0], font=font)
-      line_height = sample_bbox[3] - sample_bbox[1] + 4  # Add 4px spacing between lines
+      # Add 4px spacing between lines
+      line_height = sample_bbox[3] - sample_bbox[1] + 4
     else:
       line_height = font_size + 4
 
@@ -317,7 +319,9 @@ def process_playlist_cover(
     job: Dict[str, Any],
     playlist_id: str,
     playlist_name: str,
-    output_dir: str = "build/generated_covers"
+    output_dir: str = "build/generated_covers",
+    cutoff_date: Optional[datetime.datetime] = None,
+    effective_now: Optional[datetime.datetime] = None
 ) -> bool:
   """
   Process playlist cover generation and upload for a job.
@@ -344,8 +348,9 @@ def process_playlist_cover(
   # Get caption from config or use playlist name
   caption = cover_config.get('caption', playlist_name)
 
-  # Apply template variables to caption
-  caption = apply_template_variables(caption, job, playlist_name)
+  # Apply template variables to caption using the effective crawl date
+  caption = apply_template_variables(
+    caption, job, playlist_name, cutoff_date, effective_now)
 
   # Create output directory if it doesn't exist
   os.makedirs(output_dir, exist_ok=True)
@@ -371,7 +376,7 @@ def process_playlist_cover(
   return upload_playlist_image(sp, playlist_id, jpeg_path)
 
 
-def apply_template_variables(text: str, job: Dict[str, Any], playlist_name: str) -> str:
+def apply_template_variables(text: str, job: Dict[str, Any], playlist_name: str, cutoff_date: Optional[datetime.datetime] = None, custom_date: Optional[datetime.datetime] = None) -> str:
   """
   Apply template variables to text, similar to generate_playlist_name.
 
@@ -383,23 +388,37 @@ def apply_template_variables(text: str, job: Dict[str, Any], playlist_name: str)
   Returns:
       Text with template variables replaced
   """
-  import datetime
-
-  now = datetime.datetime.now()
+  # Determine effective and real dates
+  now = custom_date if custom_date else datetime.datetime.now()
+  real_now = datetime.datetime.now()
 
   # Calculate date range for consistency with playlist naming
-  cutoff_date = now - datetime.timedelta(days=7)
-  date_range_start = cutoff_date
+  date_range_start = cutoff_date if cutoff_date else now - \
+      datetime.timedelta(days=7)
   date_range_end = now
   date_range_days = (date_range_end - date_range_start).days
 
-  # Basic date variables
+  # Basic variables
   text = text.replace('{playlist_name}', playlist_name)
   text = text.replace('{job_name}', job.get('name', 'unknown'))
+
+  # Virtual-date variables (respect --date)
   text = text.replace('{date}', now.strftime('%Y-%m-%d'))
   text = text.replace('{year}', str(now.year))
   text = text.replace('{month}', now.strftime('%B'))
+  text = text.replace('{month_num}', now.strftime('%m'))
+  text = text.replace('{year_short}', str(now.year)[-2:])
   text = text.replace('{week_num}', str(now.isocalendar()[1]))
+  text = text.replace('{day}', now.strftime('%d'))
+  text = text.replace('{day_name}', now.strftime('%A'))
+  text = text.replace('{day_name_short}', now.strftime('%a'))
+  text = text.replace('{timestamp}', str(int(now.timestamp())))
+
+  # Week variables based on virtual date
+  week_start = now - datetime.timedelta(days=now.weekday())
+  week_end = week_start + datetime.timedelta(days=6)
+  text = text.replace('{week_start_date}', week_start.strftime('%Y-%m-%d'))
+  text = text.replace('{week_end_date}', week_end.strftime('%Y-%m-%d'))
 
   # Date range variables (matching the playlist naming system)
   text = text.replace('{date_range_start_date}',
@@ -407,5 +426,27 @@ def apply_template_variables(text: str, job: Dict[str, Any], playlist_name: str)
   text = text.replace('{date_range_end_date}',
                       date_range_end.strftime('%Y-%m-%d'))
   text = text.replace('{date_range_days}', str(date_range_days))
+  text = text.replace('{date_range_start_short}',
+                      date_range_start.strftime('%b %d'))
+  text = text.replace('{date_range_end_short}',
+                      date_range_end.strftime('%b %d'))
+
+  # Real-date variables (always reflect actual current date/time)
+  text = text.replace('{real_date}', real_now.strftime('%Y-%m-%d'))
+  text = text.replace('{real_year}', str(real_now.year))
+  text = text.replace('{real_month}', real_now.strftime('%B'))
+  text = text.replace('{real_month_num}', real_now.strftime('%m'))
+  text = text.replace('{real_year_short}', str(real_now.year)[-2:])
+  text = text.replace('{real_week_num}', str(real_now.isocalendar()[1]))
+  text = text.replace('{real_day}', real_now.strftime('%d'))
+  text = text.replace('{real_day_name}', real_now.strftime('%A'))
+  text = text.replace('{real_day_name_short}', real_now.strftime('%a'))
+  text = text.replace('{real_timestamp}', str(int(real_now.timestamp())))
+  real_week_start = real_now - datetime.timedelta(days=real_now.weekday())
+  real_week_end = real_week_start + datetime.timedelta(days=6)
+  text = text.replace('{real_week_start_date}',
+                      real_week_start.strftime('%Y-%m-%d'))
+  text = text.replace('{real_week_end_date}',
+                      real_week_end.strftime('%Y-%m-%d'))
 
   return text

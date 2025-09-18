@@ -79,7 +79,8 @@ def test_cover_generation(job_name: str, config_path: str = "crawl_config.yaml")
   caption = cover_config.get('caption', playlist_name)
 
   # Apply template variables to caption
-  caption = apply_template_variables(caption, job, playlist_name)
+  caption = apply_template_variables(
+    caption, job, playlist_name, cutoff_date, now)
 
   print(f"📝 Playlist name: {playlist_name}")
   print(f"📝 Caption: {caption}")
