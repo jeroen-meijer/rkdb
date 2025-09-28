@@ -97,14 +97,15 @@ class ArtistFetchManager:
     # artist_id -> artist data
     self.fetched_artists: Dict[str, Dict[str, Any]] = {}
 
-  def add_artist_request(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime):
+  def add_artist_request(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime):
     """Add an artist request with job-specific filtering criteria."""
     if artist_id not in self.artist_requests:
       self.artist_requests[artist_id] = []
 
     self.artist_requests[artist_id].append({
       'job_name': job_name,
-      'cutoff_date': cutoff_date
+      'cutoff_date': cutoff_date,
+      'end_date': end_date
     })
 
   def fetch_all_artists(self) -> Dict[str, Dict[str, Any]]:
@@ -153,7 +154,7 @@ class ArtistFetchManager:
 
     return self.fetched_artists
 
-  def get_artist_tracks_for_job(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+  def get_artist_tracks_for_job(self, artist_id: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime) -> List[Dict[str, Any]]:
     """Get tracks for a specific artist and job, filtering by the job's cutoff date."""
     if artist_id not in self.fetched_artists:
       return []
@@ -164,11 +165,13 @@ class ArtistFetchManager:
 
     # Pre-filter albums by release date for this specific job
     recent_albums = []
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+
     for album in albums:
       if album and album.get('release_date'):
         try:
           release_date = parse_release_date(album['release_date'])
-          if release_date > cutoff_date:
+          if release_date > cutoff_date and release_date < end_date_exclusive:
             recent_albums.append(album)
         except ValueError as e:
           print(
@@ -222,14 +225,15 @@ class LabelFetchManager:
     # label_name -> list of tracks
     self.fetched_labels: Dict[str, List[Dict[str, Any]]] = {}
 
-  def add_label_request(self, label_name: str, job_name: str, cutoff_date: datetime.datetime):
+  def add_label_request(self, label_name: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime):
     """Add a label request with job-specific filtering criteria."""
     if label_name not in self.label_requests:
       self.label_requests[label_name] = []
 
     self.label_requests[label_name].append({
       'job_name': job_name,
-      'cutoff_date': cutoff_date
+      'cutoff_date': cutoff_date,
+      'end_date': end_date
     })
 
   def fetch_all_labels(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -268,7 +272,7 @@ class LabelFetchManager:
 
     return self.fetched_labels
 
-  def get_label_tracks_for_job(self, label_name: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+  def get_label_tracks_for_job(self, label_name: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime) -> List[Dict[str, Any]]:
     """Get tracks for a specific label and job, filtering by the job's cutoff date."""
     if label_name not in self.fetched_labels:
       return []
@@ -277,11 +281,13 @@ class LabelFetchManager:
     recent_tracks = []
     mismatched_labels = set()
 
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+
     for track in tracks:
       if track and track.get('album') and track['album'].get('release_date'):
         try:
           release_date = parse_release_date(track['album']['release_date'])
-          if release_date > cutoff_date:
+          if release_date > cutoff_date and release_date < end_date_exclusive:
             # NOTE(jeroen-meijer): Validate that the track's actual label matches our search term
             track_label = track['album'].get('label', '')
             label_match_ratio = fuzz.ratio(
@@ -329,14 +335,15 @@ class PlaylistFetchManager:
     # playlist_id -> playlist data
     self.fetched_playlists: Dict[str, Dict[str, Any]] = {}
 
-  def add_playlist_request(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime):
+  def add_playlist_request(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime):
     """Add a playlist request with job-specific filtering criteria."""
     if playlist_id not in self.playlist_requests:
       self.playlist_requests[playlist_id] = []
 
     self.playlist_requests[playlist_id].append({
       'job_name': job_name,
-      'cutoff_date': cutoff_date
+      'cutoff_date': cutoff_date,
+      'end_date': end_date
     })
 
   def fetch_all_playlists(self) -> Dict[str, Dict[str, Any]]:
@@ -447,7 +454,7 @@ class PlaylistFetchManager:
 
     return self.fetched_playlists
 
-  def get_playlist_tracks_for_job(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime) -> List[Dict[str, Any]]:
+  def get_playlist_tracks_for_job(self, playlist_id: str, job_name: str, cutoff_date: datetime.datetime, end_date: datetime.datetime) -> List[Dict[str, Any]]:
     """Get tracks for a specific playlist and job, filtering by the job's cutoff date."""
     if playlist_id not in self.fetched_playlists:
       return []
@@ -455,18 +462,20 @@ class PlaylistFetchManager:
     playlist_data = self.fetched_playlists[playlist_id]
     tracks = playlist_data['tracks']
 
-    # Filter tracks added after cutoff date
+    # Filter tracks within (cutoff_date, end_date] — lower exclusive, upper inclusive
     recent_tracks = []
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
     for item in tracks:
       if not item or not item.get('track'):
         continue
 
       added_at = datetime.datetime.fromisoformat(
         item['added_at'].replace('Z', '+00:00'))
-      # Make cutoff_date timezone-aware for comparison
+      # Make cutoff and end dates timezone-aware for comparison
       cutoff_date_aware = cutoff_date.replace(tzinfo=datetime.timezone.utc)
+      end_date_aware = end_date_exclusive.replace(tzinfo=datetime.timezone.utc)
 
-      if added_at > cutoff_date_aware:
+      if added_at > cutoff_date_aware and added_at < end_date_aware:
         track = item['track']
         if track and track.get('id'):
           # NOTE(jeroen-meijer): Reconstruct full track data from album ID reference
@@ -759,14 +768,15 @@ def save_combined_crawl_report(all_reports: List[Dict[str, Any]]):
     print(f"⚠️  Warning: Could not save combined crawl report: {e}")
 
 
-def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.datetime = None):
+def crawl_spotify_playlists(cache: CrawlCache = None, custom_end_date: datetime.datetime = None, custom_start_date: datetime.datetime = None, config_path: Optional[str] = None):
   """
   Crawl Spotify playlists, artists, and labels based on YAML configuration.
   Creates new playlists with tracks added within the specified time window.
 
   Args:
     cache: Optional CrawlCache instance
-    custom_date: Optional custom date to use instead of current date (for testing/debugging)
+    custom_end_date: Optional custom end date to use instead of current date (for testing/debugging)
+    custom_start_date: Optional custom start date to override job config days_back setting
   """
   print("🎵 Spotify Playlist Crawler")
   print("=" * 50)
@@ -779,10 +789,11 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
 
   # Load configuration
   try:
-    with open('crawl_config.yaml', 'r') as file:
+    config_file = config_path if config_path else 'crawl_config.yaml'
+    with open(config_file, 'r') as file:
       config = yaml.safe_load(file)
   except FileNotFoundError:
-    print("❌ Error: crawl_config.yaml not found")
+    print(f"❌ Error: {config_path or 'crawl_config.yaml'} not found")
     return
   except yaml.YAMLError as e:
     print(f"❌ Error parsing YAML: {e}")
@@ -833,23 +844,32 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
 
     # Calculate time window
     days_back = filters.get('added_between_days', 7)
-    current_time = custom_date if custom_date else datetime.datetime.now()
-    cutoff_date = current_time - datetime.timedelta(days=days_back)
+    current_time = custom_end_date if custom_end_date else datetime.datetime.now()
+
+    # Use custom_start_date if provided, otherwise calculate from days_back
+    if custom_start_date:
+      # Subtract 1 day since we use > comparison
+      cutoff_date = custom_start_date - datetime.timedelta(days=1)
+    else:
+      cutoff_date = current_time - datetime.timedelta(days=days_back)
 
     # Collect playlist requests
     playlist_ids = resolve_references(inputs.get('playlists') or [], config)
     for playlist_id in playlist_ids:
-      playlist_manager.add_playlist_request(playlist_id, job_name, cutoff_date)
+      playlist_manager.add_playlist_request(
+        playlist_id, job_name, cutoff_date, current_time)
 
     # Collect artist requests
     artist_ids = resolve_references(inputs.get('artists') or [], config)
     for artist_id in artist_ids:
-      artist_manager.add_artist_request(artist_id, job_name, cutoff_date)
+      artist_manager.add_artist_request(
+        artist_id, job_name, cutoff_date, current_time)
 
     # Collect label requests
     label_ids = resolve_references(inputs.get('labels') or [], config)
     for label_id in label_ids:
-      label_manager.add_label_request(label_id, job_name, cutoff_date)
+      label_manager.add_label_request(
+        label_id, job_name, cutoff_date, current_time)
 
   # Second pass: fetch all data in optimized batches
   print("🔄 Fetching all data in optimized batches...")
@@ -875,7 +895,7 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
   all_reports = []
   for job in jobs:
     try:
-      report = process_job_optimized(sp, job, config, cache, custom_date,
+      report = process_job_optimized(sp, job, config, cache, custom_end_date, custom_start_date,
                                      album_manager, artist_manager, label_manager, playlist_manager)
       if report:
         all_reports.append(report)
@@ -899,9 +919,9 @@ def crawl_spotify_playlists(cache: CrawlCache = None, custom_date: datetime.date
 
 
 def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any], cache: CrawlCache,
-                          custom_date: datetime.datetime, album_manager: AlbumFetchManager,
-                          artist_manager: ArtistFetchManager, label_manager: LabelFetchManager,
-                          playlist_manager: PlaylistFetchManager):
+                          custom_end_date: datetime.datetime, custom_start_date: datetime.datetime,
+                          album_manager: AlbumFetchManager, artist_manager: ArtistFetchManager,
+                          label_manager: LabelFetchManager, playlist_manager: PlaylistFetchManager):
   """Process a single job from the configuration using optimized centralized managers."""
   job_name = job.get('name', 'Unnamed Job')
   print(f"🔄 Processing job: {job_name}")
@@ -920,16 +940,30 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
 
   # Calculate time window
   days_back = filters.get('added_between_days', 7)
-  current_time = custom_date if custom_date else datetime.datetime.now()
-  cutoff_date = current_time - datetime.timedelta(days=days_back)
+  current_time = custom_end_date if custom_end_date else datetime.datetime.now()
 
-  if custom_date:
-    print(f"📅 Using custom date: {custom_date.strftime('%Y-%m-%d')}")
+  # Use custom_start_date if provided, otherwise calculate from days_back
+  if custom_start_date:
+    # Lower bound exclusive: include custom_start_date itself
+    cutoff_date = custom_start_date - datetime.timedelta(days=1)
+  else:
+    # Lower bound exclusive so that added_between_days=N yields last N days inclusive
+    cutoff_date = current_time - datetime.timedelta(days=days_back)
+
+  if custom_end_date or custom_start_date:
+    if custom_start_date and custom_end_date:
+      print(
+        f"📅 Using custom date range: {custom_start_date.strftime('%Y-%m-%d')} to {custom_end_date.strftime('%Y-%m-%d')}")
+    elif custom_end_date:
+      print(f"📅 Using custom end date: {custom_end_date.strftime('%Y-%m-%d')}")
+    elif custom_start_date:
+      print(
+        f"📅 Using custom start date: {custom_start_date.strftime('%Y-%m-%d')}")
     print(
-      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+      f"📅 Date bounds: ({cutoff_date.strftime('%Y-%m-%d')} exclusive, {current_time.strftime('%Y-%m-%d')} inclusive)")
   else:
     print(
-      f"📅 Looking for tracks added/released after: {cutoff_date.strftime('%Y-%m-%d')}")
+      f"📅 Date bounds: ({cutoff_date.strftime('%Y-%m-%d')} exclusive, {current_time.strftime('%Y-%m-%d')} inclusive)")
 
   # Collect all tracks
   all_tracks = []
@@ -942,7 +976,7 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
       playlist_tracks = []
       for playlist_id in playlist_ids:
         tracks = playlist_manager.get_playlist_tracks_for_job(
-          playlist_id, job_name, cutoff_date)
+          playlist_id, job_name, cutoff_date, current_time)
         playlist_tracks.extend(tracks)
 
       all_tracks.extend(playlist_tracks)
@@ -959,7 +993,7 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
       artist_tracks = []
       for artist_id in artist_ids:
         tracks = artist_manager.get_artist_tracks_for_job(
-          artist_id, job_name, cutoff_date)
+          artist_id, job_name, cutoff_date, current_time)
         artist_tracks.extend(tracks)
 
       all_tracks.extend(artist_tracks)
@@ -976,7 +1010,7 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
       label_tracks = []
       for label_id in label_ids:
         tracks = label_manager.get_label_tracks_for_job(
-          label_id, job_name, cutoff_date)
+          label_id, job_name, cutoff_date, current_time)
         label_tracks.extend(tracks)
 
       all_tracks.extend(label_tracks)
@@ -1000,10 +1034,21 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
     # Continue to create the playlist even if empty
 
   # Deduplicate tracks if requested
-  if options.get('deduplicate', True):
+  deduplicate_option = options.get('deduplicate')
+  if deduplicate_option is not None:
     try:
-      unique_tracks = deduplicate_tracks(all_tracks)
-      print(f"🔄 Deduplicated: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      if deduplicate_option == DEDUPE_ON_ID:
+        unique_tracks = deduplicate_tracks(all_tracks, DEDUPE_ON_ID)
+        print(
+          f"🔄 Deduplicated by ID: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      elif deduplicate_option == DEDUPE_ON_MATCH:
+        unique_tracks = deduplicate_tracks(all_tracks, DEDUPE_ON_MATCH)
+        print(
+          f"🔄 Deduplicated by match: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      else:
+        print(
+          f"⚠️  Warning: Unknown deduplicate option '{deduplicate_option}', skipping deduplication")
+        unique_tracks = all_tracks
       all_tracks = unique_tracks
     except Exception as e:
       print(f"⚠️  Warning: Error during deduplication: {e}")
@@ -1016,9 +1061,9 @@ def process_job_optimized(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict
       all_tracks = []
 
     playlist_name = generate_playlist_name(
-      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time, None)
     playlist_description = generate_playlist_name(
-      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time, None)
     is_public = output_playlist.get('public', False)
 
     print(f"📝 Creating playlist: {playlist_name}")
@@ -1126,6 +1171,7 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
   # Calculate time window
   days_back = filters.get('added_between_days', 7)
   current_time = custom_date if custom_date else datetime.datetime.now()
+  # Lower bound exclusive so that N yields last N days inclusive
   cutoff_date = current_time - datetime.timedelta(days=days_back)
 
   if custom_date:
@@ -1190,10 +1236,21 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
     # Continue to create the playlist even if empty
 
   # Deduplicate tracks if requested
-  if options.get('deduplicate', True):
+  deduplicate_option = options.get('deduplicate')
+  if deduplicate_option is not None:
     try:
-      unique_tracks = deduplicate_tracks(all_tracks)
-      print(f"🔄 Deduplicated: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      if deduplicate_option == DEDUPE_ON_ID:
+        unique_tracks = deduplicate_tracks(all_tracks, DEDUPE_ON_ID)
+        print(
+          f"🔄 Deduplicated by ID: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      elif deduplicate_option == DEDUPE_ON_MATCH:
+        unique_tracks = deduplicate_tracks(all_tracks, DEDUPE_ON_MATCH)
+        print(
+          f"🔄 Deduplicated by match: {len(all_tracks)} → {len(unique_tracks)} tracks")
+      else:
+        print(
+          f"⚠️  Warning: Unknown deduplicate option '{deduplicate_option}', skipping deduplication")
+        unique_tracks = all_tracks
       all_tracks = unique_tracks
     except Exception as e:
       print(f"⚠️  Warning: Error during deduplication: {e}")
@@ -1206,9 +1263,9 @@ def process_job(sp: spotipy.Spotify, job: Dict[str, Any], config: Dict[str, Any]
       all_tracks = []
 
     playlist_name = generate_playlist_name(
-      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+      output_playlist.get('name', 'Generated Playlist'), job, cutoff_date, len(all_tracks), all_tracks, current_time, None)
     playlist_description = generate_playlist_name(
-      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time)
+      output_playlist.get('description', 'Generated by Spotify Crawler'), job, cutoff_date, len(all_tracks), all_tracks, current_time, None)
     is_public = output_playlist.get('public', False)
 
     print(f"📝 Creating playlist: {playlist_name}")
@@ -1656,7 +1713,28 @@ def get_label_tracks(sp: spotipy.Spotify, label_ids: List[str], cutoff_date: dat
   return all_tracks
 
 
-def deduplicate_tracks(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+DEDUPE_ON_ID = 'on_id'
+DEDUPE_ON_MATCH = 'on_match'
+
+
+def deduplicate_tracks(tracks: List[Dict[str, Any]], method: str = DEDUPE_ON_ID) -> List[Dict[str, Any]]:
+  """Remove duplicate tracks based on the specified method.
+
+  Args:
+    tracks: List of track dictionaries
+    method: Deduplication method - DEDUPE_ON_ID or DEDUPE_ON_MATCH
+      - DEDUPE_ON_ID: Remove tracks with duplicate IDs (original behavior)
+      - DEDUPE_ON_MATCH: Remove tracks with identical artist names and track titles
+  """
+  if method == DEDUPE_ON_ID:
+    return _deduplicate_by_id(tracks)
+  elif method == DEDUPE_ON_MATCH:
+    return _deduplicate_by_match(tracks)
+  else:
+    raise ValueError(f"Unknown deduplication method: {method}")
+
+
+def _deduplicate_by_id(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
   """Remove duplicate tracks based on track ID."""
   seen_ids = set()
   unique_tracks = []
@@ -1669,21 +1747,72 @@ def deduplicate_tracks(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
   return unique_tracks
 
 
-def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, cutoff_date: Optional[datetime.datetime] = None, track_count: int = 0, all_tracks: Optional[List[Dict[str, Any]]] = None, custom_date: Optional[datetime.datetime] = None) -> str:
+def _deduplicate_by_match(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+  """Remove duplicate tracks based on matching artist names and track titles."""
+  seen_matches = set()
+  unique_tracks = []
+
+  for track in tracks:
+    if not track:
+      continue
+
+    # Get track name
+    track_name = track.get('name', '').strip().lower()
+    if not track_name:
+      continue
+
+    # Get artist names - handle both single artist and multiple artists
+    artists = track.get('artists', [])
+    if not artists:
+      continue
+
+    # Create a sorted list of artist names for consistent matching
+    artist_names = []
+    for artist in artists:
+      if isinstance(artist, dict) and 'name' in artist:
+        artist_names.append(artist['name'].strip().lower())
+      elif isinstance(artist, str):
+        artist_names.append(artist.strip().lower())
+
+    if not artist_names:
+      continue
+
+    # Sort artist names for consistent matching regardless of order
+    artist_names.sort()
+    artists_key = '|'.join(artist_names)
+
+    # Create match key combining artists and track name
+    match_key = f"{artists_key}::{track_name}"
+
+    if match_key not in seen_matches:
+      seen_matches.add(match_key)
+      unique_tracks.append(track)
+
+  return unique_tracks
+
+
+def generate_playlist_name(template: str, job: Optional[Dict[str, Any]] = None, cutoff_date: Optional[datetime.datetime] = None, track_count: int = 0, all_tracks: Optional[List[Dict[str, Any]]] = None, custom_end_date: Optional[datetime.datetime] = None, custom_start_date: Optional[datetime.datetime] = None) -> str:
   """Generate playlist name with template variables."""
   # Ensure all_tracks is a list, not None
   if all_tracks is None:
     all_tracks = []
 
-  # Use custom date if provided, otherwise use current date
-  now = custom_date if custom_date else datetime.datetime.now()
+  # Use custom end date if provided, otherwise use current date
+  now = custom_end_date if custom_end_date else datetime.datetime.now()
   real_now = datetime.datetime.now()
 
-  # Calculate date range if cutoff_date is provided
-  date_range_start = cutoff_date if cutoff_date else now - \
-      datetime.timedelta(days=7)
-  date_range_end = now
-  date_range_days = (date_range_end - date_range_start).days
+  # Calculate date range
+  # Since filtering uses > cutoff_date, actual start is cutoff_date + 1 day
+  if custom_start_date:
+    date_range_start = custom_start_date
+    date_range_end = now
+  else:
+    date_range_start = (cutoff_date + datetime.timedelta(days=1)
+                        ) if cutoff_date else now - datetime.timedelta(days=7)
+    date_range_end = now
+
+  # Inclusive count of days in the date range
+  date_range_days = (date_range_end - date_range_start).days + 1
 
   # Get job information
   job_name = job.get('name', 'unknown') if job else 'unknown'

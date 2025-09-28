@@ -1,0 +1,9 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+- NEVER run these commands yourself, always ask for permission: `sync`, `crawl`, `buy`, `cache-clear`. You cannot run these since they are expensive API calls and we want to avoid hitting rate limits. Instead, if you want to assert or test some behavior, make a script to do so that doesn't call APIs too often (but up to 50 or so times is fine).
+- NEVER clear the cache yourself, always ask for permission
+- If you want to run any of these commands
+- NEVER run a command or custom script that may delete data from Spotify or especially Rekordbox.

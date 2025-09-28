@@ -20,8 +20,9 @@ def parse_arguments():
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog="""
 Examples:
-  python3 main.py crawl                    # Run crawl with current date
-  python3 main.py crawl --date 2025-08-10 # Run crawl as if today is 2025-08-10
+  python3 main.py crawl                              # Run crawl with current date
+  python3 main.py crawl --end-date 2025-08-10       # Run crawl as if today is 2025-08-10
+  python3 main.py crawl --start-date 2025-01-01 --end-date 2025-01-03  # Custom date range
   python3 main.py sync playlist_id         # Sync specific playlist
   python3 main.py search                   # Search Rekordbox tracks
   python3 main.py buy                      # Buy tracks
@@ -35,13 +36,21 @@ Examples:
   # Create subparsers for each command
   subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
-  # Crawl command with date option
+  # Crawl command with date options
   crawl_parser = subparsers.add_parser(
     'crawl', help='Crawl Spotify playlists, artists, and labels')
-  crawl_parser.add_argument('--date',
+  crawl_parser.add_argument('--config',
+                            type=str,
+                            metavar='PATH',
+                            help='Path to YAML config to use instead of crawl_config.yaml')
+  crawl_parser.add_argument('--end-date',
                             type=str,
                             metavar='YYYY-MM-DD',
-                            help='Custom date to use for crawl operations (format: YYYY-MM-DD)')
+                            help='Custom end date for crawl operations (format: YYYY-MM-DD)')
+  crawl_parser.add_argument('--start-date',
+                            type=str,
+                            metavar='YYYY-MM-DD',
+                            help='Custom start date for crawl operations, overrides job config days_back (format: YYYY-MM-DD)')
 
   # Sync command
   sync_parser = subparsers.add_parser(
@@ -86,8 +95,6 @@ def validate_date(date_str):
 
 def main():
   print("--- rkdb ---")
-  
-  return
 
   # Parse arguments
   try:
@@ -102,14 +109,27 @@ def main():
 
   command = parsed_args.command
 
-  # Validate and parse date if provided
-  custom_date = None
-  if hasattr(parsed_args, 'date') and parsed_args.date:
+  # Validate and parse dates if provided
+  custom_end_date = None
+  custom_start_date = None
+  if hasattr(parsed_args, 'end_date') and getattr(parsed_args, 'end_date', None):
     try:
-      custom_date = validate_date(parsed_args.date)
+      custom_end_date = validate_date(parsed_args.end_date)
     except argparse.ArgumentTypeError as e:
       print(f"❌ Error: {e}")
       sys.exit(1)
+
+  if hasattr(parsed_args, 'start_date') and getattr(parsed_args, 'start_date', None):
+    try:
+      custom_start_date = validate_date(parsed_args.start_date)
+    except argparse.ArgumentTypeError as e:
+      print(f"❌ Error: {e}")
+      sys.exit(1)
+
+  # Validate that start_date is before end_date if both are provided
+  if custom_start_date and custom_end_date and custom_start_date >= custom_end_date:
+    print("❌ Error: start-date must be before end-date")
+    sys.exit(1)
 
   # Initialize cache early to set up signal handlers
   cache = None
@@ -120,7 +140,7 @@ def main():
     'sync': lambda: sync_spotify_playlists_to_rekordbox(parsed_args.playlist_ids if hasattr(parsed_args, 'playlist_ids') else []),
     'search': lambda: search_rekordbox_tracks(),
     'buy': lambda: buy_tracks(),
-    'crawl': lambda: crawl_spotify_playlists(cache, custom_date),
+    'crawl': lambda: crawl_spotify_playlists(cache, custom_end_date, custom_start_date, getattr(parsed_args, 'config', None)),
     'extract': lambda: extract_playlist_data(parsed_args.playlist_id) if hasattr(parsed_args, 'playlist_id') else print("❌ Please provide a playlist ID"),
     'test-cover': lambda: test_cover_generation(parsed_args.job_name) if hasattr(parsed_args, 'job_name') else print("❌ Please provide a job name"),
     'cache-clear': lambda: cache.clear_cache() if cache else CrawlCache().clear_cache(),
